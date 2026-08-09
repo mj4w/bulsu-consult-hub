@@ -13,9 +13,26 @@ export function InstructorPortal() {
 
   useEffect(() => {
     const checkSession = window.setTimeout(async () => {
-      const { data: { user } } = await createClient().auth.getUser();
-      if (user) window.location.replace("/dashboard/instructor");
-      else setLoading(false);
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "instructor") {
+        window.location.replace("/dashboard/instructor");
+        return;
+      }
+
+      await supabase.auth.signOut();
+      setLoading(false);
     }, 0);
     return () => window.clearTimeout(checkSession);
   }, []);
