@@ -30,8 +30,8 @@ const faqs = [
     answer: "You can request time for research, grades, projects, or any other academic concern.",
   },
   {
-    question: "Can I choose online or face-to-face?",
-    answer: "Yes. Instructors can publish online, face-to-face, or flexible availability.",
+    question: "Can I choose online or F2F?",
+    answer: "Yes. Instructors can publish online, F2F, or flexible availability.",
   },
 ];
 
@@ -46,7 +46,7 @@ const consultationExamples = [
     concern: "Project consultation",
     date: "Aug 14",
     time: "10:00–11:00 AM",
-    format: "Face-to-face",
+    format: "F2F",
   },
   {
     concern: "Grades consultation",

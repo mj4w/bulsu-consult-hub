@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   CalendarRange,
   ChevronLeft,
@@ -9,6 +10,8 @@ import {
   ClipboardList,
   GraduationCap,
   LockKeyhole,
+  Maximize2,
+  Minimize2,
   Send,
   X,
   UserRound,
@@ -44,6 +47,7 @@ type AvailabilityRow = Omit<Availability, "instructor"> & {
 type ConsultationRequest = {
   id: string;
   availability_id: string;
+  instructor_id?: string;
   requested_start_datetime: string;
   requested_end_datetime: string;
   concern_type: "research" | "grades" | "projects" | "others";
@@ -51,6 +55,19 @@ type ConsultationRequest = {
   status: "pending" | "approved" | "declined" | "cancelled";
   decision_note: string | null;
   created_at: string;
+  instructor?: { full_name: string | null; email: string | null } | null;
+  availability?: { consultation_mode: Availability["consultation_mode"] } | null;
+};
+
+type ConsultationRequestRow = Omit<ConsultationRequest, "instructor" | "availability"> & {
+  instructor?:
+    | { full_name: string | null; email: string | null }[]
+    | { full_name: string | null; email: string | null }
+    | null;
+  availability?:
+    | { consultation_mode: Availability["consultation_mode"] }[]
+    | { consultation_mode: Availability["consultation_mode"] }
+    | null;
 };
 
 type OccupiedSlot = {
@@ -66,12 +83,66 @@ type CalendarBlocker = {
   requested_end_datetime: string;
 };
 
-type SelectedAvailability = {
+type AvailabilityChoice = {
   availability: Availability;
-  day: string;
   freeStart: string;
   freeEnd: string;
 };
+
+type SelectedAvailability = {
+  day: string;
+  freeStart: string;
+  freeEnd: string;
+  choices: AvailabilityChoice[];
+};
+
+type RequestableSlot = {
+  availability: Availability;
+  freeStart: Date;
+  freeEnd: Date;
+  lane: number;
+  laneCount: number;
+};
+
+type PendingRequestSlot = {
+  request: ConsultationRequest;
+  start: Date;
+  end: Date;
+  lane: number;
+  laneCount: number;
+};
+
+type ApprovedRequestSlot = {
+  request: ConsultationRequest;
+  start: Date;
+  end: Date;
+  lane: number;
+  laneCount: number;
+};
+
+type StudentCalendarLayout = {
+  availabilitySlots: RequestableSlot[];
+  pendingSlots: PendingRequestSlot[];
+  approvedSlots: ApprovedRequestSlot[];
+};
+
+function readableCalendarBlockHeight(baseHeight: number, textValues: string[], laneCount: number) {
+  const visibleTextLength = textValues.join(" ").length;
+  const narrowLanePenalty = laneCount > 1 ? 18 : 0;
+  const wrappedTextPenalty = Math.min(36, Math.max(0, Math.ceil((visibleTextLength - 42) / 22) * 12));
+
+  return Math.max(baseHeight, 76 + narrowLanePenalty + wrappedTextPenalty);
+}
+
+function visualEndTimeForCalendarBlock(start: Date, actualEnd: Date, textValues: string[]) {
+  const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
+  const endHour = Math.min(21, actualEnd.getHours() + actualEnd.getMinutes() / 60);
+  const baseHeight = Math.max(34, (endHour - startHour) * 64);
+  const readableHeight = readableCalendarBlockHeight(baseHeight, textValues, 1);
+  const visualDurationMs = (readableHeight / 64) * 60 * 60 * 1000;
+
+  return Math.max(actualEnd.getTime(), start.getTime() + visualDurationMs);
+}
 
 type StudentProfile = {
   program: string | null;
@@ -83,6 +154,14 @@ function normalizeAvailabilityRows(rows: AvailabilityRow[]): Availability[] {
   return rows.map((item) => ({
     ...item,
     instructor: Array.isArray(item.instructor) ? item.instructor[0] ?? null : item.instructor ?? null,
+  }));
+}
+
+function normalizeConsultationRequestRows(rows: ConsultationRequestRow[]): ConsultationRequest[] {
+  return rows.map((request) => ({
+    ...request,
+    instructor: Array.isArray(request.instructor) ? request.instructor[0] ?? null : request.instructor ?? null,
+    availability: Array.isArray(request.availability) ? request.availability[0] ?? null : request.availability ?? null,
   }));
 }
 
@@ -116,7 +195,6 @@ export function StudentConsultationWorkspace({
         new Date(first.requested_start_datetime).getTime() -
         new Date(second.requested_start_datetime).getTime(),
     );
-  const nextConsultation = upcomingConsultations[0] ?? null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -138,7 +216,7 @@ export function StudentConsultationWorkspace({
       const nextWindows = normalizeAvailabilityRows(data ?? []);
       setAvailableWindows(nextWindows);
       setSelectedAvailability((current) =>
-        current && !nextWindows.some((item) => item.id === current.availability.id)
+        current && !current.choices.some((choice) => nextWindows.some((item) => item.id === choice.availability.id))
           ? null
           : current,
       );
@@ -155,7 +233,7 @@ export function StudentConsultationWorkspace({
 
       const { data, error } = await supabase
         .from("consultation_requests")
-        .select("id, availability_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at")
+        .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
         .eq("student_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -166,7 +244,7 @@ export function StudentConsultationWorkspace({
         return;
       }
 
-      setStudentRequests((data ?? []) as ConsultationRequest[]);
+      setStudentRequests(normalizeConsultationRequestRows((data ?? []) as ConsultationRequestRow[]));
     }
 
     async function refreshOccupiedSlots({ silent = false }: { silent?: boolean } = {}) {
@@ -230,7 +308,7 @@ export function StudentConsultationWorkspace({
         concern_type: concernType,
         message,
       })
-      .select("id, availability_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at")
+      .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
       .single();
 
     if (error || !data) {
@@ -244,7 +322,7 @@ export function StudentConsultationWorkspace({
       return false;
     }
 
-    setStudentRequests((current) => [data as ConsultationRequest, ...current]);
+    setStudentRequests((current) => [normalizeConsultationRequestRows([data as ConsultationRequestRow])[0], ...current]);
     setSelectedAvailability(null);
     setToast({ message: "Consultation request sent for instructor review.", tone: "success" });
     return true;
@@ -276,17 +354,28 @@ export function StudentConsultationWorkspace({
         </div>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <SummaryCard icon={CalendarRange} label="Upcoming consultations" value={String(upcomingConsultations.length)} />
-          <SummaryCard icon={ClipboardList} label="Pending requests" value={String(pendingRequests)} />
+          <SummaryCard
+            icon={CalendarRange}
+            label="Upcoming consultations"
+            value={String(upcomingConsultations.length)}
+            detail={upcomingConsultations.length ? "Confirmed meetings" : "No confirmed meetings"}
+          />
+          <SummaryCard
+            icon={ClipboardList}
+            label="Pending requests"
+            value={String(pendingRequests)}
+            detail={pendingRequests ? "Awaiting instructor review" : "No pending requests"}
+          />
           <SummaryCard
             icon={UserRound}
             label="Profile status"
             value={profileComplete ? "Complete" : "Incomplete"}
             tone={profileComplete ? "success" : "warning"}
+            detail={profileComplete ? "Ready to request" : "Action required"}
           />
         </section>
 
-        <UpcomingConsultationCard request={nextConsultation} />
+        <UpcomingConsultationCard requests={upcomingConsultations} />
 
         <section id="calendar" className={`mt-8 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}>
           <CalendarPanel
@@ -347,15 +436,13 @@ export function StudentConsultationWorkspace({
           </div>
         </section>
       </div>
-      {selectedAvailability && (
-        <RequestConsultationModal
-          availability={selectedAvailability.availability}
-          freeStart={selectedAvailability.freeStart}
-          freeEnd={selectedAvailability.freeEnd}
-          occupiedSlots={occupiedConsultations}
-          onClose={() => setSelectedAvailability(null)}
-          onSubmit={submitRequest}
-        />
+        {selectedAvailability && (
+          <RequestConsultationModal
+            choices={selectedAvailability.choices}
+            occupiedSlots={occupiedConsultations}
+            onClose={() => setSelectedAvailability(null)}
+            onSubmit={submitRequest}
+          />
       )}
       {toast && <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
     </main>
@@ -372,7 +459,6 @@ function DashboardHeader() {
         <div className="flex items-center gap-2">
           <nav className="mr-3 hidden items-center gap-7 text-sm text-muted-foreground lg:flex">
             <a href="#calendar" className="font-medium text-primary">Dashboard</a>
-            <a href="#calendar" className="transition hover:text-foreground">Consultations</a>
             <Link href="/dashboard/student/history" className="transition hover:text-foreground">History</Link>
             <a href="/onboarding" className="transition hover:text-foreground">My profile</a>
           </nav>
@@ -384,9 +470,6 @@ function DashboardHeader() {
       <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
         <Link href="/dashboard/student" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
           Dashboard
-        </Link>
-        <Link href="/dashboard/student#calendar" className="shrink-0 rounded-full border border-border px-4 py-2">
-          Consultations
         </Link>
         <Link href="/dashboard/student/history" className="shrink-0 rounded-full border border-border px-4 py-2">
           History
@@ -403,11 +486,13 @@ function SummaryCard({
   icon: Icon,
   label,
   value,
+  detail,
   tone = "default",
 }: {
   icon: typeof CalendarRange;
   label: string;
   value: string;
+  detail: string;
   tone?: "default" | "success" | "warning";
 }) {
   return (
@@ -420,13 +505,17 @@ function SummaryCard({
         {value}
       </p>
       <div className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
-        {tone === "warning" ? "Action required" : "No records yet"}
+        {detail}
       </div>
     </div>
   );
 }
 
-function UpcomingConsultationCard({ request }: { request: ConsultationRequest | null }) {
+function UpcomingConsultationCard({ requests }: { requests: ConsultationRequest[] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activePosition = requests.length ? activeIndex % requests.length : 0;
+  const request = requests.length ? requests[activePosition] : null;
+
   if (!request) {
     return (
       <section className="mt-6 rounded-2xl border border-dashed border-border bg-card p-6 sm:p-7">
@@ -451,48 +540,89 @@ function UpcomingConsultationCard({ request }: { request: ConsultationRequest | 
 
   const start = new Date(request.requested_start_datetime);
   const end = new Date(request.requested_end_datetime);
+  const calendarMonth = start.toLocaleDateString(undefined, { month: "short" }).toUpperCase();
+  const calendarDay = start.getDate();
+  const hasMoreMeetings = requests.length > 1;
+  const instructorName = consultationInstructorName(request);
+  const format = request.availability?.consultation_mode
+    ? consultationModeLabel(request.availability.consultation_mode)
+    : "Consultation";
+
+  function showNextMeeting() {
+    setActiveIndex((current) => (current + 1) % requests.length);
+  }
 
   return (
-    <section className="mt-6 overflow-hidden rounded-3xl border border-primary/25 bg-primary text-primary-foreground shadow-xl shadow-primary/10">
-      <div className="grid gap-0 lg:grid-cols-[1fr_0.42fr]">
-        <div className="p-6 sm:p-8">
-          <div className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
+    <section className="relative mt-6">
+      {hasMoreMeetings && (
+        <>
+          <div className="absolute inset-x-4 top-3 h-full rounded-3xl bg-transparent shadow-[0_18px_0_-8px_rgba(75,85,201,0.18)] dark:shadow-[0_18px_0_-8px_rgba(129,140,248,0.18)]" />
+          <div className="absolute inset-x-8 top-6 h-full rounded-3xl bg-transparent shadow-[0_22px_0_-8px_rgba(75,85,201,0.1)] dark:shadow-[0_22px_0_-8px_rgba(129,140,248,0.12)]" />
+        </>
+      )}
+
+      <div
+        key={request.id}
+        className="consultation-card-swap relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary via-primary to-indigo-500 text-primary-foreground shadow-lg shadow-primary/10"
+      >
+      <div className="relative flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="pointer-events-none absolute -right-16 -top-28 size-64 rounded-full bg-white/10 blur-3xl" />
+
+        <div className="relative min-w-0 flex-1">
+          <div className="inline-flex items-center rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] shadow-sm backdrop-blur">
             Confirmed consultation
           </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Your next consultation is scheduled.
+          <h2 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">
+            Next consultation scheduled
           </h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-primary-foreground/80">
-            This request has been approved by the instructor. Prepare your concern details before the meeting time.
+          <p className="mt-2 max-w-2xl text-sm leading-5 text-primary-foreground/80">
+            Approved by {instructorName}. Prepare your concern details before the meeting.
           </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-white/12 p-4">
-              <p className="text-xs text-primary-foreground/70">Date</p>
-              <p className="mt-2 text-sm font-semibold">
-                {start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white/12 p-4">
-              <p className="text-xs text-primary-foreground/70">Time</p>
-              <p className="mt-2 text-sm font-semibold">
-                {timeLabel(start)} - {timeLabel(end)}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white/12 p-4">
-              <p className="text-xs text-primary-foreground/70">Purpose</p>
-              <p className="mt-2 text-sm font-semibold capitalize">{request.concern_type}</p>
-            </div>
-          </div>
+          {hasMoreMeetings && (
+            <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-primary-foreground/60">
+              {activePosition + 1} of {requests.length} upcoming meetings
+            </p>
+          )}
         </div>
-        <div className="flex items-center justify-center border-t border-white/15 bg-white/10 p-6 lg:border-l lg:border-t-0">
-          <Link
-            href="/dashboard/student/history"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-white/90"
-          >
-            View details
-            <ChevronRight className="size-4" />
-          </Link>
+
+        <div className="relative flex shrink-0 flex-col gap-3 rounded-2xl border border-white/20 bg-white/12 p-3 backdrop-blur-sm sm:min-w-[28rem] sm:flex-row sm:items-center">
+            <div className="overflow-hidden rounded-xl bg-white text-primary shadow-md shadow-primary/20">
+              <div className="bg-slate-950 px-5 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.22em] text-white">
+                {calendarMonth}
+              </div>
+              <div className="px-6 py-3 text-center text-3xl font-bold leading-none">
+                {calendarDay}
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold leading-5">
+                {start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-white/14 px-3 py-1 text-primary-foreground/90">
+                  {format}
+                </span>
+                <span className="rounded-full bg-white/14 px-3 py-1 text-primary-foreground/90">
+                  {timeLabel(start)} - {timeLabel(end)}
+                </span>
+                <span className="rounded-full bg-white/14 px-3 py-1 capitalize text-primary-foreground/85">
+                  {request.concern_type}
+                </span>
+              </div>
+            </div>
         </div>
+      </div>
+
+      {hasMoreMeetings && (
+        <button
+          type="button"
+          onClick={showNextMeeting}
+          className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-primary shadow-md shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-white/90"
+        >
+          Next
+          <ChevronRight className="size-4" />
+        </button>
+      )}
       </div>
     </section>
   );
@@ -515,6 +645,7 @@ function CalendarPanel({
 }) {
   const studentProgram = profile?.program ?? null;
   const pendingRequests = requests.filter((request) => request.status === "pending");
+  const approvedRequests = requests.filter((request) => request.status === "approved");
   const visibleAvailability = useMemo(
     () =>
       availability.filter((item) => {
@@ -526,19 +657,81 @@ function CalendarPanel({
   );
   const firstAvailabilityDate = visibleAvailability[0]?.start_datetime ?? new Date().toISOString();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(firstAvailabilityDate)));
+  const [fullView, setFullView] = useState(false);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const hours = Array.from({ length: 14 }, (_, index) => index + 7);
+  const requestableSlotsByDay = useMemo(
+    () =>
+      new Map(
+        weekDays.map((day) => [
+          localDateKey(day),
+          buildStudentRequestableSlotsForDay({
+            availability: visibleAvailability,
+            occupiedSlots,
+            pendingRequests,
+            day,
+          }),
+        ]),
+    ),
+    [weekDays, visibleAvailability, occupiedSlots, pendingRequests],
+  );
+  const expandedDayCount = weekDays.filter(
+    (day) => (requestableSlotsByDay.get(localDateKey(day))?.length ?? 0) > 1,
+  ).length;
+  const calendarMinWidthRem = 3.5 + expandedDayCount * 20 + (7 - expandedDayCount) * 9;
+  const calendarColumns = `3.5rem ${weekDays
+    .map((day) => {
+      const slotCount = requestableSlotsByDay.get(localDateKey(day))?.length ?? 0;
+      return slotCount > 1 ? "minmax(20rem, 2.4fr)" : "minmax(9rem, 1fr)";
+    })
+    .join(" ")}`;
+
+  useEffect(() => {
+    if (!fullView) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [fullView]);
 
   function moveWeek(amount: number) {
-    setWeekStart((current) => addDays(current, amount * 7));
+    const nextWeekStart = addDays(weekStart, amount * 7);
+    setWeekStart(nextWeekStart);
   }
 
   function goToToday() {
-    setWeekStart(startOfWeek(new Date()));
+    const today = new Date();
+    setWeekStart(startOfWeek(today));
   }
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+
+  const calendarSection = (
+    <section
+      className={`relative border border-border bg-card p-4 transition-all sm:p-8 ${
+        fullView
+          ? "flex h-full w-full flex-col overflow-hidden rounded-none border-0 bg-background p-0"
+          : "overflow-hidden rounded-2xl"
+      }`}
+    >
+      {fullView && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-border bg-card px-4 py-3">
+          <button type="button" onClick={goToToday} className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:border-primary/40 hover:text-primary">Today</button>
+          <button type="button" onClick={() => moveWeek(-1)} className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground" aria-label="Previous week"><ChevronLeft className="size-4" /></button>
+          <p className="min-w-40 text-center text-xs font-medium">{weekLabel(weekStart, weekDays[6])}</p>
+          <button type="button" onClick={() => moveWeek(1)} className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground" aria-label="Next week"><ChevronRight className="size-4" /></button>
+          <button
+            type="button"
+            onClick={() => setFullView(false)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary"
+            aria-label="Exit full calendar view"
+          >
+            <Minimize2 className="size-3.5" />
+            Exit
+          </button>
+        </div>
+      )}
+
+      <div className={`flex flex-col justify-between gap-4 sm:flex-row sm:items-end ${fullView ? "hidden" : ""}`}>
         <div>
           <p className="text-sm text-muted-foreground">Consultation calendar</p>
           <h2 className="mt-1 text-2xl font-medium tracking-tight">Find a time to talk</h2>
@@ -550,71 +743,92 @@ function CalendarPanel({
             <p className="min-w-44 text-center text-sm font-medium">{weekLabel(weekStart, weekDays[6])}</p>
             <button type="button" onClick={() => moveWeek(1)} className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground" aria-label="Next week"><ChevronRight className="size-4" /></button>
           </div>
+          <button
+            type="button"
+            onClick={() => setFullView(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+            aria-label="Open full calendar view"
+          >
+            <Maximize2 className="size-3.5" />
+            Full view
+          </button>
         </div>
       </div>
 
-      <div className={`transition ${locked ? "select-none blur-[2px]" : ""}`} aria-hidden={locked}>
-        <div className="mt-5 overflow-x-auto rounded-xl border border-border">
-          <div className="min-w-[680px] sm:min-w-[760px]">
-            <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-border bg-muted/20">
+      <div className={`min-h-0 transition ${fullView ? "flex flex-1 flex-col" : ""} ${locked ? "select-none blur-[2px]" : ""}`} aria-hidden={locked}>
+        <p className={`mt-4 text-xs text-muted-foreground sm:hidden ${fullView ? "hidden" : ""}`}>
+          Swipe the calendar sideways to see wider day columns.
+        </p>
+        <div className={`overflow-auto border border-border ${fullView ? "m-0 min-h-0 flex-1 rounded-none border-0" : "mt-3 max-h-[44rem] rounded-xl sm:mt-5"}`}>
+          <div
+            className={fullView ? "min-h-full" : ""}
+            style={{ minWidth: `max(100%, ${calendarMinWidthRem}rem)` }}
+          >
+            <div className="grid border-b border-border bg-muted/20 transition-[grid-template-columns]" style={{ gridTemplateColumns: calendarColumns }}>
               <div />
-              {weekDays.map((day) => <div key={day.toISOString()} className={`border-l border-border px-2 py-3 text-center ${isSameDay(day, new Date()) ? "bg-primary/10" : ""}`}><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{day.toLocaleDateString(undefined, { weekday: "short" })}</p><p className={`mt-1 text-sm font-medium ${isSameDay(day, new Date()) ? "text-primary" : ""}`}>{day.getDate()}</p></div>)}
-            </div>
-            <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
-              <div>{hours.map((hour) => <div key={hour} className="h-16 border-b border-border px-2 pt-2 text-[10px] text-muted-foreground">{formatHour(hour)}</div>)}</div>
-              {weekDays.map((day) => (
-                <div key={day.toISOString()} className="relative border-l border-border">
-                  {hours.map((hour) => (
-                    <div key={hour} className="h-16 border-b border-border" />
-                  ))}
-                  {visibleAvailability
-                    .filter((item) => eventTouchesDay(item, day))
-                    .flatMap((item) => {
-                      const dayWindow = requestWindowForDay(item, localDateKey(day));
-                      const occupiedForWindow = occupiedSlots.filter(
-                        (slot) =>
-                          slot.availability_id === item.id &&
-                          requestTouchesDay(slot, day),
-                      );
-                      const pendingForWindow = pendingRequests.filter(
-                        (request) =>
-                          request.availability_id === item.id &&
-                          consultationRequestTouchesDay(request, day),
-                      );
-                      const unavailableForWindow = [...occupiedForWindow, ...pendingForWindow];
+              {weekDays.map((day) => {
+                const dayKey = localDateKey(day);
+                const hasMultipleSlots = (requestableSlotsByDay.get(dayKey)?.length ?? 0) > 1;
 
-                      return buildFreeSegments(dayWindow.start, dayWindow.end, unavailableForWindow).map((segment) => ({
-                        availability: item,
-                        freeStart: segment.start,
-                        freeEnd: segment.end,
-                      }));
-                    })
-                    .sort((first, second) => first.freeStart.getTime() - second.freeStart.getTime())
-                    .map((slot) => (
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`border-l border-border px-2 py-3 text-center transition ${
+                      hasMultipleSlots ? "bg-primary/15" : isSameDay(day, new Date()) ? "bg-primary/10" : ""
+                    }`}
+                  >
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {day.toLocaleDateString(undefined, { weekday: "short" })}
+                    </p>
+                    <p className={`mt-1 text-sm font-medium ${hasMultipleSlots || isSameDay(day, new Date()) ? "text-primary" : ""}`}>
+                      {day.getDate()}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid transition-[grid-template-columns]" style={{ gridTemplateColumns: calendarColumns }}>
+              <div>{hours.map((hour) => <div key={hour} className="h-16 border-b border-border px-2 pt-2 text-[10px] text-muted-foreground">{formatHour(hour)}</div>)}</div>
+              {weekDays.map((day) => {
+                const dayKey = localDateKey(day);
+                const dayLayout = layoutStudentCalendarDay({
+                  availabilitySlots: requestableSlotsByDay.get(dayKey) ?? [],
+                  pendingRequests: pendingRequests.filter((request) =>
+                    consultationRequestTouchesDay(request, day),
+                  ),
+                  approvedRequests: approvedRequests.filter((request) =>
+                    consultationRequestTouchesDay(request, day),
+                  ),
+                });
+
+                return (
+                  <div key={day.toISOString()} className="relative border-l border-border">
+                    {hours.map((hour) => (
+                      <div key={hour} className="h-16 border-b border-border" />
+                    ))}
+                    {dayLayout.availabilitySlots.map((slot) => (
                       <StudentRequestableSlot
-                        key={`${slot.availability.id}-${day.toISOString()}-${slot.freeStart.toISOString()}`}
-                        availability={slot.availability}
+                        key={`${slot.availability.id}-${day.toISOString()}-${slot.freeStart.toISOString()}-${slot.freeEnd.toISOString()}`}
                         day={day}
-                        freeStart={slot.freeStart}
-                        freeEnd={slot.freeEnd}
+                        slot={slot}
                         onSelect={onSelectAvailability}
                       />
                     ))}
-                  {pendingRequests
-                    .filter((request) => consultationRequestTouchesDay(request, day))
-                    .sort(
-                      (first, second) =>
-                        new Date(first.requested_start_datetime).getTime() -
-                        new Date(second.requested_start_datetime).getTime(),
-                    )
-                    .map((request) => (
+                    {dayLayout.pendingSlots.map((slot) => (
                       <StudentPendingRequestSlot
-                        key={`${request.id}-${day.toISOString()}`}
-                        request={request}
+                        key={`${slot.request.id}-${day.toISOString()}`}
+                        slot={slot}
                       />
                     ))}
-                </div>
-              ))}
+                    {dayLayout.approvedSlots.map((slot) => (
+                      <StudentApprovedRequestSlot
+                        key={`${slot.request.id}-${day.toISOString()}`}
+                        slot={slot}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -636,13 +850,24 @@ function CalendarPanel({
       )}
     </section>
   );
+
+  if (fullView && typeof document !== "undefined") {
+    return createPortal(
+      <div className="fixed left-0 top-0 z-[9999] h-screen w-screen overflow-hidden bg-background">
+        {calendarSection}
+      </div>,
+      document.body,
+    );
+  }
+
+  return calendarSection;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function StudentAvailabilityEvent({ availability }: { availability: Availability }) {
   const start = new Date(availability.start_datetime);
   const end = new Date(availability.end_datetime);
-  const format = availability.consultation_mode === "f2f" ? "Face-to-face" : availability.consultation_mode === "online" ? "Online" : "Online or face-to-face";
+  const format = availability.consultation_mode === "f2f" ? "F2F" : availability.consultation_mode === "online" ? "Online" : "Online or F2F";
 
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
@@ -653,90 +878,170 @@ function StudentAvailabilityEvent({ availability }: { availability: Availability
 }
 
 function StudentRequestableSlot({
-  availability,
   day,
-  freeStart,
-  freeEnd,
+  slot,
   onSelect,
 }: {
-  availability: Availability;
   day: Date;
-  freeStart: Date;
-  freeEnd: Date;
+  slot: RequestableSlot;
   onSelect: (selection: SelectedAvailability) => void;
 }) {
-  const format = consultationModeLabel(availability.consultation_mode);
-  const professor = professorName(availability);
+  const format = consultationModeLabel(slot.availability.consultation_mode);
+  const professor = professorName(slot.availability);
+  const colors = instructorScheduleColor(slot.availability);
+  const freeStart = slot.freeStart;
+  const freeEnd = slot.freeEnd;
   const startHour = Math.max(7, freeStart.getHours() + freeStart.getMinutes() / 60);
   const endHour = Math.min(21, freeEnd.getHours() + freeEnd.getMinutes() / 60);
   const top = (startHour - 7) * 64;
   const height = Math.max(34, (endHour - startHour) * 64);
+  const gap = 4;
+  const laneWidth = 100 / slot.laneCount;
+  const width = `calc(${laneWidth}% - ${gap}px)`;
+  const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
 
   return (
     <button
       type="button"
       onClick={() =>
         onSelect({
-          availability,
           day: localDateKey(day),
           freeStart: freeStart.toISOString(),
           freeEnd: freeEnd.toISOString(),
+          choices: [
+            {
+              availability: slot.availability,
+              freeStart: slot.freeStart.toISOString(),
+              freeEnd: slot.freeEnd.toISOString(),
+            },
+          ],
         })
       }
-      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition hover:brightness-95"
-      style={{ top, height }}
+      className="absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border px-3 py-2 text-left text-xs leading-tight text-white shadow-sm transition hover:brightness-95"
+      style={{
+        top,
+        height,
+        left,
+        width,
+        background: colors.background,
+        borderColor: colors.border,
+        boxShadow: `0 12px 24px -18px ${colors.shadow}`,
+      }}
       title={`${format} with ${professor}`}
     >
-      <span className="block font-semibold">{format}</span>
-      <span className="block truncate">
+      <span className="block whitespace-normal break-words font-semibold">{format}</span>
+      <span className="block whitespace-normal break-words">
         {timeLabel(freeStart)} - {timeLabel(freeEnd)}
       </span>
-      <span className="mt-1 block truncate text-[11px] text-white/85">{professor}</span>
+      <span className="mt-1 block whitespace-normal break-words text-[11px] text-white/85">{professor}</span>
     </button>
   );
 }
 
-function StudentPendingRequestSlot({ request }: { request: ConsultationRequest }) {
-  const start = new Date(request.requested_start_datetime);
-  const end = new Date(request.requested_end_datetime);
+function StudentPendingRequestSlot({ slot }: { slot: PendingRequestSlot }) {
+  const { request, start, end } = slot;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
   const top = (startHour - 7) * 64;
-  const height = Math.max(34, (endHour - startHour) * 64);
+  const timeHeight = Math.max(34, (endHour - startHour) * 64);
+  const gap = 4;
+  const laneWidth = 100 / slot.laneCount;
+  const width = `calc(${laneWidth}% - ${gap}px)`;
+  const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
+  const timeRange = `${timeLabel(start)} - ${timeLabel(end)}`;
+  const height = readableCalendarBlockHeight(
+    timeHeight,
+    ["Pending", "Awaiting review", timeRange, request.concern_type],
+    slot.laneCount,
+  );
+  const compact = height < 64;
+  const roomy = height >= 92;
 
   return (
     <div
-      className="absolute inset-x-1 z-20 flex flex-col justify-center overflow-hidden rounded-lg border border-amber-300/80 bg-amber-50/95 px-3 py-2 text-left text-xs text-amber-950 shadow-sm backdrop-blur-sm dark:border-amber-300/40 dark:bg-amber-300/20 dark:text-amber-50"
-      style={{ top, height }}
+      className={`absolute z-20 overflow-hidden rounded-lg border border-amber-400/80 bg-amber-300/75 text-left text-amber-950 shadow-[0_14px_28px_-18px_rgba(180,83,9,0.75)] backdrop-blur-md transition dark:border-amber-300/60 dark:bg-amber-400/70 dark:text-amber-950 ${
+        compact ? "flex items-center gap-1.5 px-2 py-1 text-[10px]" : "flex flex-col justify-center px-3 py-2 text-xs"
+      }`}
+      style={{ top, height, left, width }}
       title="Pending instructor review"
     >
-      <span className="inline-flex w-fit items-center rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900 dark:bg-amber-200/20 dark:text-amber-50">
+      <span className={`inline-flex w-fit items-center rounded-full bg-white/70 font-bold uppercase text-amber-900 shadow-sm dark:bg-amber-100/80 dark:text-amber-950 ${
+        compact ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]" : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
+      }`}>
         Pending
       </span>
-      <span className="mt-2 block font-semibold leading-tight">
+      <span className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}>
         Awaiting review
       </span>
-      <span className="mt-1 block font-medium leading-tight">
-        {timeLabel(start)} - {timeLabel(end)}
+      <span className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}>
+        {timeRange}
       </span>
-      <span className="mt-1 block truncate text-[11px] leading-tight text-amber-800/80 capitalize dark:text-amber-50/80">
-        {request.concern_type}
+      {roomy && (
+        <span className="mt-1 block whitespace-normal break-words text-[11px] leading-tight text-amber-900/85 capitalize dark:text-amber-950/80">
+          {request.concern_type}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StudentApprovedRequestSlot({ slot }: { slot: ApprovedRequestSlot }) {
+  const { request, start, end } = slot;
+  const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
+  const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
+  const top = (startHour - 7) * 64;
+  const timeHeight = Math.max(34, (endHour - startHour) * 64);
+  const gap = 4;
+  const laneWidth = 100 / slot.laneCount;
+  const width = `calc(${laneWidth}% - ${gap}px)`;
+  const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
+  const format = request.availability?.consultation_mode
+    ? consultationModeLabel(request.availability.consultation_mode)
+    : "Confirmed";
+  const timeRange = `${timeLabel(start)} - ${timeLabel(end)}`;
+  const height = readableCalendarBlockHeight(
+    timeHeight,
+    ["Approved", format, timeRange, request.concern_type],
+    slot.laneCount,
+  );
+  const compact = height < 64;
+  const roomy = height >= 92;
+
+  return (
+    <div
+      className={`absolute z-30 overflow-hidden rounded-lg border border-emerald-400/80 bg-emerald-500/75 text-left text-white shadow-[0_14px_28px_-18px_rgba(5,150,105,0.82)] backdrop-blur-md dark:border-emerald-300/60 dark:bg-emerald-400/70 dark:text-emerald-950 ${
+        compact ? "flex items-center gap-1.5 px-2 py-1 text-[10px]" : "flex flex-col justify-center px-3 py-2 text-xs"
+      }`}
+      style={{ top, height, left, width }}
+      title="Approved consultation"
+    >
+      <span className={`inline-flex w-fit items-center rounded-full bg-white/25 font-bold uppercase text-white shadow-sm dark:bg-emerald-100/80 dark:text-emerald-950 ${
+        compact ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]" : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
+      }`}>
+        Approved
       </span>
+      <span className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}>
+        {format}
+      </span>
+      <span className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}>
+        {timeRange}
+      </span>
+      {roomy && (
+        <span className="mt-1 block whitespace-normal break-words text-[11px] leading-tight text-white/85 capitalize dark:text-emerald-950/80">
+          {request.concern_type}
+        </span>
+      )}
     </div>
   );
 }
 
 function RequestConsultationModal({
-  availability,
-  freeStart,
-  freeEnd,
+  choices,
   occupiedSlots,
   onClose,
   onSubmit,
 }: {
-  availability: Availability;
-  freeStart: string;
-  freeEnd: string;
+  choices: AvailabilityChoice[];
   occupiedSlots: OccupiedSlot[];
   onClose: () => void;
   onSubmit: (
@@ -749,12 +1054,16 @@ function RequestConsultationModal({
 }) {
   const [concernType, setConcernType] = useState<ConsultationRequest["concern_type"]>("research");
   const [message, setMessage] = useState("");
+  const [selectedChoiceIndex, setSelectedChoiceIndex] = useState(0);
   const [selectedStartIndex, setSelectedStartIndex] = useState(0);
   const [selectedEndIndex, setSelectedEndIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const safeChoiceIndex = Math.min(selectedChoiceIndex, Math.max(0, choices.length - 1));
+  const selectedChoice = choices[safeChoiceIndex] ?? choices[0];
+  const availability = selectedChoice.availability;
   const dayWindow = {
-    start: new Date(freeStart),
-    end: new Date(freeEnd),
+    start: new Date(selectedChoice.freeStart),
+    end: new Date(selectedChoice.freeEnd),
   };
   const professor = professorName(availability);
   const occupiedForSelectedWindow = occupiedSlots.filter(
@@ -806,6 +1115,43 @@ function RequestConsultationModal({
             <X className="size-5" />
           </button>
         </div>
+
+        {choices.length > 1 && (
+          <div className="mt-5">
+            <p className="text-sm font-medium">Choose instructor</p>
+            <div className="mt-3 grid gap-3">
+              {choices.map((choice, index) => {
+                const choiceStart = new Date(choice.freeStart);
+                const choiceEnd = new Date(choice.freeEnd);
+                const selected = index === safeChoiceIndex;
+
+                return (
+                  <button
+                    type="button"
+                    key={choice.availability.id}
+                    onClick={() => {
+                      setSelectedChoiceIndex(index);
+                      setSelectedStartIndex(0);
+                      setSelectedEndIndex(0);
+                    }}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      selected
+                        ? "border-primary bg-primary/10 text-foreground shadow-sm"
+                        : "border-border bg-background hover:border-primary/40"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">
+                      {professorName(choice.availability)}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {consultationModeLabel(choice.availability.consultation_mode)} · {timeLabel(choiceStart)} - {timeLabel(choiceEnd)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mt-5">
           <p className="text-sm font-medium">Select your preferred time</p>
@@ -945,6 +1291,194 @@ function buildTimeOptions(start: Date, end: Date) {
 
   return options;
 }
+function buildStudentRequestableSlotsForDay({
+  availability,
+  occupiedSlots,
+  pendingRequests,
+  day,
+}: {
+  availability: Availability[];
+  occupiedSlots: OccupiedSlot[];
+  pendingRequests: ConsultationRequest[];
+  day: Date;
+}) {
+  return availability
+    .filter((item) => eventTouchesDay(item, day))
+    .flatMap((item) => {
+      const dayWindow = requestWindowForDay(item, localDateKey(day));
+      const occupiedForWindow = occupiedSlots.filter(
+        (slot) =>
+          slot.availability_id === item.id &&
+          requestTouchesDay(slot, day),
+      );
+      const pendingForWindow = pendingRequests.filter(
+        (request) =>
+          request.availability_id === item.id &&
+          consultationRequestTouchesDay(request, day),
+      );
+      const unavailableForWindow = [...occupiedForWindow, ...pendingForWindow];
+
+      return buildFreeSegments(dayWindow.start, dayWindow.end, unavailableForWindow).map((segment) => ({
+        availability: item,
+        freeStart: segment.start,
+        freeEnd: segment.end,
+        lane: 0,
+        laneCount: 1,
+      }));
+    });
+}
+function layoutStudentCalendarDay({
+  availabilitySlots,
+  pendingRequests,
+  approvedRequests,
+}: {
+  availabilitySlots: RequestableSlot[];
+  pendingRequests: ConsultationRequest[];
+  approvedRequests: ConsultationRequest[];
+}): StudentCalendarLayout {
+  type CalendarEntry =
+    | {
+        type: "availability";
+      start: Date;
+      end: Date;
+      visualEnd: number;
+      slot: RequestableSlot;
+      lane: number;
+      laneCount: number;
+    }
+    | {
+        type: "pending";
+      start: Date;
+      end: Date;
+      visualEnd: number;
+      request: ConsultationRequest;
+      lane: number;
+      laneCount: number;
+      }
+    | {
+        type: "approved";
+      start: Date;
+      end: Date;
+      visualEnd: number;
+      request: ConsultationRequest;
+      lane: number;
+      laneCount: number;
+      };
+
+  const entries = [
+    ...availabilitySlots.map((slot) => ({
+      type: "availability" as const,
+      start: slot.freeStart,
+      end: slot.freeEnd,
+      visualEnd: slot.freeEnd.getTime(),
+      slot,
+      lane: 0,
+      laneCount: 1,
+    })),
+    ...pendingRequests.map((request) => ({
+      type: "pending" as const,
+      start: new Date(request.requested_start_datetime),
+      end: new Date(request.requested_end_datetime),
+      visualEnd: visualEndTimeForCalendarBlock(
+        new Date(request.requested_start_datetime),
+        new Date(request.requested_end_datetime),
+        [
+          "Pending",
+          "Awaiting review",
+          `${timeLabel(new Date(request.requested_start_datetime))} - ${timeLabel(new Date(request.requested_end_datetime))}`,
+          request.concern_type,
+        ],
+      ),
+      request,
+      lane: 0,
+      laneCount: 1,
+    })),
+    ...approvedRequests.map((request) => ({
+      type: "approved" as const,
+      start: new Date(request.requested_start_datetime),
+      end: new Date(request.requested_end_datetime),
+      visualEnd: visualEndTimeForCalendarBlock(
+        new Date(request.requested_start_datetime),
+        new Date(request.requested_end_datetime),
+        [
+          "Approved",
+          request.availability?.consultation_mode
+            ? consultationModeLabel(request.availability.consultation_mode)
+            : "Confirmed",
+          `${timeLabel(new Date(request.requested_start_datetime))} - ${timeLabel(new Date(request.requested_end_datetime))}`,
+          request.concern_type,
+        ],
+      ),
+      request,
+      lane: 0,
+      laneCount: 1,
+    })),
+  ].sort((first, second) => first.start.getTime() - second.start.getTime()) satisfies CalendarEntry[];
+
+  const clusters: typeof entries[] = [];
+  let currentCluster: typeof entries = [];
+  let currentClusterEnd = 0;
+
+  for (const entry of entries) {
+    if (!currentCluster.length || entry.start.getTime() < currentClusterEnd) {
+      currentCluster.push(entry);
+      currentClusterEnd = Math.max(currentClusterEnd, entry.visualEnd);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [entry];
+      currentClusterEnd = entry.visualEnd;
+    }
+  }
+
+  if (currentCluster.length) {
+    clusters.push(currentCluster);
+  }
+
+  for (const cluster of clusters) {
+    const laneEnds: number[] = [];
+
+    for (const entry of cluster) {
+      const availableLane = laneEnds.findIndex((endTime) => endTime <= entry.start.getTime());
+      const lane = availableLane === -1 ? laneEnds.length : availableLane;
+      laneEnds[lane] = entry.visualEnd;
+      if (entry.type === "availability") {
+        entry.slot.lane = lane;
+      }
+      entry.lane = lane;
+    }
+
+    for (const entry of cluster) {
+      if (entry.type === "availability") {
+        entry.slot.laneCount = laneEnds.length;
+      }
+      entry.laneCount = laneEnds.length;
+    }
+  }
+
+  return {
+    availabilitySlots: entries
+      .filter((entry) => entry.type === "availability")
+      .map((entry) => entry.slot),
+    pendingSlots: entries
+      .filter((entry) => entry.type === "pending")
+      .map((entry) => ({
+        request: entry.request,
+        start: entry.start,
+        end: entry.end,
+        lane: entry.lane,
+        laneCount: entry.laneCount,
+      })),
+    approvedSlots: entries
+      .filter((entry) => entry.type === "approved")
+      .map((entry) => ({
+        request: entry.request,
+        start: entry.start,
+        end: entry.end,
+        lane: entry.lane,
+        laneCount: entry.laneCount,
+      })),
+  };
+}
 function buildFreeSegments(start: Date, end: Date, occupiedSlots: CalendarBlocker[]) {
   const occupied = occupiedSlots
     .map((slot) => ({
@@ -971,7 +1505,34 @@ function buildFreeSegments(start: Date, end: Date, occupiedSlots: CalendarBlocke
 
   return segments.filter((segment) => segment.end.getTime() - segment.start.getTime() >= 30 * 60_000);
 }
-function consultationModeLabel(mode: Availability["consultation_mode"]) { return mode === "f2f" ? "Face-to-face" : mode === "online" ? "Online" : "Online or face-to-face"; }
+function consultationModeLabel(mode: Availability["consultation_mode"]) { return mode === "f2f" ? "F2F" : mode === "online" ? "Online" : "Online or F2F"; }
+function consultationInstructorName(request: ConsultationRequest) {
+  const name = request.instructor?.full_name?.trim();
+  if (name) return name;
+  const emailName = request.instructor?.email?.split("@")[0]?.trim();
+  return emailName || "the instructor";
+}
+function instructorScheduleColor(availability: Availability) {
+  const palette = [
+    { background: "linear-gradient(135deg, #2563eb, #3b82f6)", border: "rgba(191, 219, 254, 0.72)", shadow: "#2563eb" },
+    { background: "linear-gradient(135deg, #0284c7, #38bdf8)", border: "rgba(186, 230, 253, 0.72)", shadow: "#0284c7" },
+    { background: "linear-gradient(135deg, #1d4ed8, #60a5fa)", border: "rgba(191, 219, 254, 0.72)", shadow: "#1d4ed8" },
+    { background: "linear-gradient(135deg, #7c3aed, #8b5cf6)", border: "rgba(221, 214, 254, 0.72)", shadow: "#7c3aed" },
+    { background: "linear-gradient(135deg, #db2777, #ec4899)", border: "rgba(251, 207, 232, 0.72)", shadow: "#db2777" },
+    { background: "linear-gradient(135deg, #c026d3, #e879f9)", border: "rgba(245, 208, 254, 0.72)", shadow: "#c026d3" },
+    { background: "linear-gradient(135deg, #4f46e5, #6366f1)", border: "rgba(199, 210, 254, 0.72)", shadow: "#4f46e5" },
+    { background: "linear-gradient(135deg, #475569, #64748b)", border: "rgba(203, 213, 225, 0.72)", shadow: "#475569" },
+    { background: "linear-gradient(135deg, #be123c, #f43f5e)", border: "rgba(254, 205, 211, 0.72)", shadow: "#be123c" },
+    { background: "linear-gradient(135deg, #9333ea, #a855f7)", border: "rgba(233, 213, 255, 0.72)", shadow: "#9333ea" },
+  ];
+  const key =
+    availability.instructor_id ||
+    availability.instructor_display_name ||
+    availability.instructor?.email ||
+    availability.id;
+  const hash = Array.from(key).reduce((total, character) => total + character.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+}
 function professorName(availability: Availability) {
   const displayName = availability.instructor_display_name?.trim();
   if (displayName) return displayName;

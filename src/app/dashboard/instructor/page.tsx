@@ -103,9 +103,6 @@ export default async function InstructorDashboardPage() {
               <a href="#dashboard" className="font-medium text-primary">
                 Dashboard
               </a>
-              <a href="#availability" className="hover:text-foreground">
-                Consultation windows
-              </a>
               <Link href="/dashboard/instructor/requests" className="inline-flex items-center hover:text-foreground">
                 Requests
                 <ClientSafeBoundary>
@@ -130,9 +127,6 @@ export default async function InstructorDashboardPage() {
         <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
           <Link href="/dashboard/instructor" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
             Dashboard
-          </Link>
-          <Link href="/dashboard/instructor#availability" className="shrink-0 rounded-full border border-border px-4 py-2">
-            Consultation windows
           </Link>
           <Link href="/dashboard/instructor/requests" className="inline-flex shrink-0 items-center rounded-full border border-border px-4 py-2">
             Requests

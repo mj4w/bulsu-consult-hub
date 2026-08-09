@@ -38,13 +38,14 @@ export default async function StudentDashboardPage() {
 
   const { data: requestData } = await supabase
     .from("consultation_requests")
-    .select("id, availability_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at")
+    .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
     .eq("student_id", user.id)
     .order("created_at", { ascending: false });
 
-  const requests = (requestData ?? []) as Array<{
+  const requestRows = (requestData ?? []) as Array<{
     id: string;
     availability_id: string;
+    instructor_id: string;
     requested_start_datetime: string;
     requested_end_datetime: string;
     concern_type: "research" | "grades" | "projects" | "others";
@@ -52,7 +53,14 @@ export default async function StudentDashboardPage() {
     status: "pending" | "approved" | "declined" | "cancelled";
     decision_note: string | null;
     created_at: string;
+    instructor?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
+    availability?: { consultation_mode: "f2f" | "online" | "both" }[] | { consultation_mode: "f2f" | "online" | "both" } | null;
   }>;
+  const requests = requestRows.map((request) => ({
+    ...request,
+    instructor: Array.isArray(request.instructor) ? request.instructor[0] ?? null : request.instructor ?? null,
+    availability: Array.isArray(request.availability) ? request.availability[0] ?? null : request.availability ?? null,
+  }));
 
   const { data: occupiedData } = await supabase
     .from("student_occupied_consultation_slots")

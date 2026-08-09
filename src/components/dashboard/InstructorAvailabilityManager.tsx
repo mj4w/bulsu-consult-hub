@@ -42,6 +42,14 @@ type Availability = {
   availability_programs?: { program: string }[];
 };
 
+type AvailabilityCalendarEvent = {
+  availability: Availability;
+  start: Date;
+  end: Date;
+  lane: number;
+  laneCount: number;
+};
+
 export type OccupiedConsultation = {
   id: string;
   requested_start_datetime: string;
@@ -186,10 +194,12 @@ export function InstructorAvailabilityManager({
     const newStart = new Date(start);
     const newEnd = new Date(end);
     const overlapsExisting = items.some((item) =>
-      item.is_active && availabilityOverlapsRange(item, newStart, newEnd),
+      item.is_active &&
+      availabilityModesConflict(item.consultation_mode, mode) &&
+      availabilityOverlapsRange(item, newStart, newEnd),
     );
     if (overlapsExisting) {
-      setError("This time overlaps an existing consultation window. Choose another time.");
+      setError("This overlaps an existing consultation window with the same or conflicting format.");
       return;
     }
     setSaving(true);
@@ -690,31 +700,33 @@ function CalendarGrid({
                     />
                   );
                 })}
-                {items
-                  .filter((item) => item.is_active)
-                  .filter((item) => eventTouchesDay(item, day))
-                  .flatMap((item) => {
-                    const window = availabilityWindowForDay(item, day);
-                    const occupiedForWindow = occupiedConsultations.filter(
-                      (request) =>
-                        requestTouchesDay(request, day) &&
-                        new Date(request.requested_start_datetime) < window.end &&
-                        new Date(request.requested_end_datetime) > window.start,
-                    );
+                {layoutAvailabilityCalendarEvents(
+                  items
+                    .filter((item) => item.is_active)
+                    .filter((item) => eventTouchesDay(item, day))
+                    .flatMap((item) => {
+                      const window = availabilityWindowForDay(item, day);
+                      const occupiedForWindow = occupiedConsultations.filter(
+                        (request) =>
+                          requestTouchesDay(request, day) &&
+                          new Date(request.requested_start_datetime) < window.end &&
+                          new Date(request.requested_end_datetime) > window.start,
+                      );
 
-                    return buildFreeSegments(window.start, window.end, occupiedForWindow).map((segment) => ({
-                      availability: item,
-                      start: segment.start,
-                      end: segment.end,
-                    }));
-                  })
-                  .sort((first, second) => first.start.getTime() - second.start.getTime())
-                  .map((event) => (
+                      return buildFreeSegments(window.start, window.end, occupiedForWindow).map((segment) => ({
+                        availability: item,
+                        start: segment.start,
+                        end: segment.end,
+                      }));
+                    }),
+                ).map((event) => (
                     <InstructorAvailabilityEvent
                       key={`${event.availability.id}-${day.toISOString()}-${event.start.toISOString()}`}
                       availability={event.availability}
                       start={event.start}
                       end={event.end}
+                      lane={event.lane}
+                      laneCount={event.laneCount}
                       onOpenDetails={onOpenDetails}
                     />
                   ))}
@@ -903,26 +915,34 @@ function InstructorAvailabilityEvent({
   availability,
   start,
   end,
+  lane,
+  laneCount,
   onOpenDetails,
 }: {
   availability: Availability;
   start: Date;
   end: Date;
+  lane: number;
+  laneCount: number;
   onOpenDetails: (item: Availability) => void;
 }) {
   const event = availability;
   const format =
     event.consultation_mode === "f2f"
-      ? "Face-to-face"
+      ? "F2F"
       : event.consultation_mode === "online"
         ? "Online"
-        : "Online or face-to-face";
+        : "Online or F2F";
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const time = `${dateLabel(new Date(event.start_datetime), { hour: "numeric", minute: "2-digit" })} – ${dateLabel(new Date(event.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
   const top = (startHour - 7) * 64;
   const height = Math.max(34, (endHour - startHour) * 64);
+  const gap = 4;
+  const laneWidth = 100 / laneCount;
+  const width = `calc(${laneWidth}% - ${gap}px)`;
+  const left = `calc(${lane * laneWidth}% + ${gap / 2}px)`;
   const dailyTime = `${dateLabel(start, { hour: "numeric", minute: "2-digit" })} - ${dateLabel(end, { hour: "numeric", minute: "2-digit" })}`;
   return (
     <button
@@ -930,8 +950,8 @@ function InstructorAvailabilityEvent({
       title={format}
       onClick={() => onOpenDetails(event)}
       onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
-      style={{ top, height }}
-      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
+      style={{ top, height, left, width }}
+      className="calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
     >
       <span className="block font-semibold">{format}</span>
       <span className="block truncate">{dailyTime}</span>
@@ -1062,7 +1082,7 @@ function AvailabilityEditor({
           {(
             [
               ["online", "Online"],
-              ["f2f", "Face-to-face"],
+              ["f2f", "F2F"],
               ["both", "Both available"],
             ] as const
           ).map(([value, label]) => (
@@ -1142,10 +1162,10 @@ function AvailabilityDetails({
   const time = `${dateLabel(new Date(item.start_datetime), { hour: "numeric", minute: "2-digit" })} – ${dateLabel(new Date(item.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
   const mode =
     item.consultation_mode === "f2f"
-      ? "Face-to-face"
+      ? "F2F"
       : item.consultation_mode === "online"
         ? "Online"
-        : "Online or face-to-face";
+        : "Online or F2F";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
@@ -1398,6 +1418,55 @@ function availabilityOverlapsRange(availability: Availability, rangeStart: Date,
   }
 
   return false;
+}
+function availabilityModesConflict(
+  existingMode: Availability["consultation_mode"],
+  nextMode: Availability["consultation_mode"],
+) {
+  return existingMode === "both" || nextMode === "both" || existingMode === nextMode;
+}
+function layoutAvailabilityCalendarEvents(
+  events: Array<Omit<AvailabilityCalendarEvent, "lane" | "laneCount">>,
+) {
+  const sortedEvents: AvailabilityCalendarEvent[] = events
+    .map((event) => ({ ...event, lane: 0, laneCount: 1 }))
+    .sort((first, second) => first.start.getTime() - second.start.getTime());
+
+  const clusters: AvailabilityCalendarEvent[][] = [];
+  let currentCluster: AvailabilityCalendarEvent[] = [];
+  let currentClusterEnd = 0;
+
+  for (const event of sortedEvents) {
+    if (!currentCluster.length || event.start.getTime() < currentClusterEnd) {
+      currentCluster.push(event);
+      currentClusterEnd = Math.max(currentClusterEnd, event.end.getTime());
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [event];
+      currentClusterEnd = event.end.getTime();
+    }
+  }
+
+  if (currentCluster.length) {
+    clusters.push(currentCluster);
+  }
+
+  for (const cluster of clusters) {
+    const laneEnds: number[] = [];
+
+    for (const event of cluster) {
+      const availableLane = laneEnds.findIndex((endTime) => endTime <= event.start.getTime());
+      const lane = availableLane === -1 ? laneEnds.length : availableLane;
+      laneEnds[lane] = event.end.getTime();
+      event.lane = lane;
+    }
+
+    for (const event of cluster) {
+      event.laneCount = laneEnds.length;
+    }
+  }
+
+  return sortedEvents;
 }
 function buildFreeSegments(start: Date, end: Date, occupiedRequests: OccupiedConsultation[]) {
   const occupied = occupiedRequests

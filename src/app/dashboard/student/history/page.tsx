@@ -59,9 +59,6 @@ export default async function StudentHistoryPage() {
               <Link href="/dashboard/student" className="hover:text-foreground">
                 Dashboard
               </Link>
-              <Link href="/dashboard/student#calendar" className="hover:text-foreground">
-                Consultations
-              </Link>
               <Link href="/dashboard/student/history" className="font-medium text-primary">
                 History
               </Link>
@@ -77,9 +74,6 @@ export default async function StudentHistoryPage() {
         <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
           <Link href="/dashboard/student" className="shrink-0 rounded-full border border-border px-4 py-2">
             Dashboard
-          </Link>
-          <Link href="/dashboard/student#calendar" className="shrink-0 rounded-full border border-border px-4 py-2">
-            Consultations
           </Link>
           <Link href="/dashboard/student/history" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
             History
