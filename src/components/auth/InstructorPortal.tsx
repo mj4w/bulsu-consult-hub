@@ -52,7 +52,14 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setNotice("");
-    const { data, error: signUpError } = await createClient().auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim(), test_teacher: true } } });
+    const { data, error: signUpError } = await createClient().auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { full_name: name.trim(), test_teacher: true },
+        emailRedirectTo: `${window.location.origin}/instructor-portal`,
+      },
+    });
     if (signUpError) { setError(signUpError.message); return; }
     if (!data.session) { setNotice("Account created. Confirm your email, then sign in here."); return; }
     router.push("/dashboard/instructor");
