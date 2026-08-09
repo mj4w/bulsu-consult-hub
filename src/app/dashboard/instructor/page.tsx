@@ -1,8 +1,5 @@
 import Link from "next/link";
 import {
-  Bell,
-  CalendarDays,
-  CalendarRange,
   ClipboardList,
   UserRound,
 } from "lucide-react";
@@ -15,6 +12,9 @@ import {
   InstructorAvailabilityManager,
   type OccupiedConsultation,
 } from "@/components/dashboard/InstructorAvailabilityManager";
+import { InstructorSummaryCards } from "@/components/dashboard/InstructorSummaryCards";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { PendingRequestsBadge } from "@/components/dashboard/PendingRequestsBadge";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { createClient } from "@/lib/supabase/server";
 
@@ -66,7 +66,6 @@ export default async function InstructorDashboardPage() {
     is_active: boolean;
     availability_programs?: { program: string }[];
   }>;
-  const activeAvailability = availability.filter((item) => item.is_active).length;
   const { data: requestData } = await supabase
     .from("consultation_requests")
     .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
@@ -85,24 +84,13 @@ export default async function InstructorDashboardPage() {
     ...request,
     student: Array.isArray(request.student) ? request.student[0] ?? null : request.student ?? null,
   }));
-  const pendingRequests = requests.filter((request) => request.status === "pending").length;
   const approvedRequests = requests.filter((request) => request.status === "approved");
-  const confirmedToday = requests.filter((request) => {
-    if (request.status !== "approved") return false;
-    const requestedStart = new Date(request.requested_start_datetime);
-    const today = new Date();
-    return (
-      requestedStart.getFullYear() === today.getFullYear() &&
-      requestedStart.getMonth() === today.getMonth() &&
-      requestedStart.getDate() === today.getDate()
-    );
-  }).length;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <SessionTimeout />
       <header className="border-t-4 border-primary border-b border-border bg-card">
-        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
+        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-5 sm:gap-5 sm:px-8 lg:px-12">
           <Link
             href="/dashboard/instructor"
             className="font-semibold tracking-tight"
@@ -118,26 +106,37 @@ export default async function InstructorDashboardPage() {
               <a href="#availability" className="hover:text-foreground">
                 Consultation windows
               </a>
-              <Link href="/dashboard/instructor/requests" className="hover:text-foreground">
+              <Link href="/dashboard/instructor/requests" className="inline-flex items-center hover:text-foreground">
                 Requests
+                <PendingRequestsBadge />
               </Link>
               <Link href="/onboarding" className="hover:text-foreground">
                 My profile
               </Link>
             </nav>
-            <button
-              className="hidden size-10 items-center justify-center rounded-full border border-border text-muted-foreground sm:flex"
-              aria-label="Notifications"
-            >
-              <Bell className="size-4" />
-            </button>
+            <NotificationBell role="instructor" />
             <ThemeToggle />
             <LogoutButton />
           </div>
         </div>
+        <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
+          <Link href="/dashboard/instructor" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
+            Dashboard
+          </Link>
+          <Link href="/dashboard/instructor#availability" className="shrink-0 rounded-full border border-border px-4 py-2">
+            Consultation windows
+          </Link>
+          <Link href="/dashboard/instructor/requests" className="inline-flex shrink-0 items-center rounded-full border border-border px-4 py-2">
+            Requests
+            <PendingRequestsBadge />
+          </Link>
+          <Link href="/onboarding" className="shrink-0 rounded-full border border-border px-4 py-2">
+            My profile
+          </Link>
+        </nav>
       </header>
 
-      <div id="dashboard" className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-12">
+      <div id="dashboard" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
         <div className="border-b border-border pb-8">
           <p className="text-sm font-medium text-muted-foreground">
             Instructor dashboard
@@ -150,26 +149,7 @@ export default async function InstructorDashboardPage() {
           </p>
         </div>
 
-        <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <SummaryCard
-            icon={ClipboardList}
-            label="Pending requests"
-            value={String(pendingRequests)}
-            detail={pendingRequests ? "Awaiting approval" : "No pending requests"}
-          />
-          <SummaryCard
-            icon={CalendarDays}
-            label="Confirmed today"
-            value={String(confirmedToday)}
-            detail={confirmedToday ? "Approved consultations" : "No approved consultations"}
-          />
-          <SummaryCard
-            icon={CalendarRange}
-            label="Open consultation windows"
-            value={String(activeAvailability)}
-            detail={activeAvailability ? "Available to students" : "None published"}
-          />
-        </section>
+        <InstructorSummaryCards initialAvailability={availability} initialRequests={requests} />
 
         <section id="availability" className="mt-8">
           <InstructorAvailabilityManager
@@ -230,30 +210,5 @@ export default async function InstructorDashboardPage() {
         </section>
       </div>
     </main>
-  );
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof CalendarDays;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <Icon className="size-7 text-primary" />
-      </div>
-      <p className="mt-5 text-3xl font-medium tracking-tight">{value}</p>
-      <p className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
-        {detail}
-      </p>
-    </div>
   );
 }

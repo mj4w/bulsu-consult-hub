@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/onboarding";
+  const next = safeInternalPath(url.searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
@@ -71,4 +71,11 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(new URL(next, url.origin));
+}
+
+function safeInternalPath(value: string | null) {
+  if (!value) return "/onboarding";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/onboarding";
+  if (value.includes("\\") || value.includes("\n") || value.includes("\r")) return "/onboarding";
+  return value;
 }

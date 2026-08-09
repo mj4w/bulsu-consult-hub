@@ -282,7 +282,7 @@ export function InstructorAvailabilityManager({
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+    <section className="rounded-2xl border border-border bg-card p-4 sm:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -642,7 +642,7 @@ function CalendarGrid({
         </div>
       </div>
       <div className="max-h-[42rem] overflow-auto">
-        <div className="min-w-[760px]">
+        <div className="min-w-[680px] sm:min-w-[760px]">
           <div className="sticky top-0 z-50 isolate grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-border bg-card shadow-sm">
             <div />
             {days.map((day) => (
@@ -813,7 +813,7 @@ function MonthCalendar({
     onCreate(localDateTime(start), localDateTime(end));
   }
   return (
-    <div className="mt-7 overflow-hidden rounded-2xl border border-border">
+    <div className="mt-7 overflow-x-auto rounded-2xl border border-border">
       <div className="border-b border-border bg-muted/30 px-4 py-3">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
@@ -836,14 +836,14 @@ function MonthCalendar({
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-7 border-b border-border bg-card">
+      <div className="grid min-w-[680px] grid-cols-7 border-b border-border bg-card sm:min-w-[760px]">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
           <div key={day} className="border-l border-border px-2 py-3 text-center text-xs font-medium text-muted-foreground">
             {day}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 bg-background">
+      <div className="grid min-w-[680px] grid-cols-7 bg-background sm:min-w-[760px]">
         {days.map((day) => {
           const events = availabilitySegmentsOn(day);
           const occupied = occupiedOn(day);

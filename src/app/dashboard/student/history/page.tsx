@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Bell } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -9,6 +9,7 @@ import {
   StudentHistoryPanel,
   type StudentHistoryRequest,
 } from "@/components/dashboard/StudentHistoryPanel";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,7 +50,7 @@ export default async function StudentHistoryPage() {
     <main className="min-h-screen bg-background text-foreground">
       <SessionTimeout />
       <header className="border-t-4 border-primary border-b border-border bg-card">
-        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
+        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-5 sm:gap-5 sm:px-8 lg:px-12">
           <Link href="/dashboard/student/history" className="font-semibold tracking-tight" aria-label="Refresh student history">
             <BrandLogo />
           </Link>
@@ -68,19 +69,28 @@ export default async function StudentHistoryPage() {
                 My profile
               </Link>
             </nav>
-            <button
-              className="hidden size-10 items-center justify-center rounded-full border border-border text-muted-foreground sm:flex"
-              aria-label="Notifications"
-            >
-              <Bell className="size-4" />
-            </button>
+            <NotificationBell role="student" />
             <ThemeToggle />
             <LogoutButton />
           </div>
         </div>
+        <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
+          <Link href="/dashboard/student" className="shrink-0 rounded-full border border-border px-4 py-2">
+            Dashboard
+          </Link>
+          <Link href="/dashboard/student#calendar" className="shrink-0 rounded-full border border-border px-4 py-2">
+            Consultations
+          </Link>
+          <Link href="/dashboard/student/history" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
+            History
+          </Link>
+          <Link href="/onboarding" className="shrink-0 rounded-full border border-border px-4 py-2">
+            My profile
+          </Link>
+        </nav>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
         <div className="mb-6">
           <Link
             href="/dashboard/student"

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ClipboardList, Clock, UserRound, X } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
@@ -26,6 +26,13 @@ export type InstructorRequest = {
 };
 
 const pageSize = 5;
+const decisionDelayMs = 5000;
+
+type PendingDecision = {
+  requestId: string;
+  status: "approved" | "declined";
+  timeoutId: number;
+};
 
 export function InstructorRequestsPanel({
   initialRequests,
@@ -37,6 +44,16 @@ export function InstructorRequestsPanel({
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [pendingPage, setPendingPage] = useState(1);
   const [reviewedPage, setReviewedPage] = useState(1);
+  const [pendingDecisions, setPendingDecisions] = useState<PendingDecision[]>([]);
+  const pendingDecisionsRef = useRef<PendingDecision[]>([]);
+
+  useEffect(() => {
+    pendingDecisionsRef.current = pendingDecisions;
+  }, [pendingDecisions]);
+
+  useEffect(() => () => {
+    pendingDecisionsRef.current.forEach((decision) => window.clearTimeout(decision.timeoutId));
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -78,6 +95,38 @@ export function InstructorRequestsPanel({
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);
+
+  function scheduleStatusUpdate(requestId: string, status: "approved" | "declined") {
+    const existingDecision = pendingDecisionsRef.current.find((decision) => decision.requestId === requestId);
+    if (existingDecision) {
+      window.clearTimeout(existingDecision.timeoutId);
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPendingDecisions((current) => current.filter((decision) => decision.requestId !== requestId));
+      void updateStatus(requestId, status);
+    }, decisionDelayMs);
+
+    setPendingDecisions((current) => [
+      ...current.filter((decision) => decision.requestId !== requestId),
+      { requestId, status, timeoutId },
+    ]);
+    setToast({
+      message:
+        status === "approved"
+          ? "Approval queued. You can undo it before it is sent."
+          : "Decline queued. You can undo it before it is sent.",
+      tone: "success",
+    });
+  }
+
+  function undoPendingDecision(requestId: string) {
+    const decision = pendingDecisionsRef.current.find((item) => item.requestId === requestId);
+    if (!decision) return;
+    window.clearTimeout(decision.timeoutId);
+    setPendingDecisions((current) => current.filter((item) => item.requestId !== requestId));
+    setToast({ message: "Action cancelled. No response was sent.", tone: "success" });
+  }
 
   async function updateStatus(requestId: string, status: "approved" | "declined") {
     const selectedRequest = requests.find((request) => request.id === requestId);
@@ -180,7 +229,7 @@ export function InstructorRequestsPanel({
   const paginatedReviewed = reviewed.slice((safeReviewedPage - 1) * pageSize, safeReviewedPage * pageSize);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-8">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Consultation requests</p>
@@ -207,8 +256,10 @@ export function InstructorRequestsPanel({
                 key={request.id}
                 request={request}
                 updating={updatingId === request.id}
-                onApprove={() => updateStatus(request.id, "approved")}
-                onDecline={() => updateStatus(request.id, "declined")}
+                pendingDecisionStatus={pendingDecisions.find((decision) => decision.requestId === request.id)?.status ?? null}
+                onUndo={() => undoPendingDecision(request.id)}
+                onApprove={() => scheduleStatusUpdate(request.id, "approved")}
+                onDecline={() => scheduleStatusUpdate(request.id, "declined")}
               />
             ))}
           </RequestSection>
@@ -228,8 +279,10 @@ export function InstructorRequestsPanel({
                 request={request}
                 updating={false}
                 compact
-                onApprove={() => updateStatus(request.id, "approved")}
-                onDecline={() => updateStatus(request.id, "declined")}
+                pendingDecisionStatus={null}
+                onUndo={() => undoPendingDecision(request.id)}
+                onApprove={() => scheduleStatusUpdate(request.id, "approved")}
+                onDecline={() => scheduleStatusUpdate(request.id, "declined")}
               />
             ))}
           </RequestSection>
@@ -296,11 +349,11 @@ function RequestSection({
         )}
       </div>
       {count > pageSize && (
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             Page {page} of {totalPages}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <button
               type="button"
               onClick={onPrevious}
@@ -352,12 +405,16 @@ function RequestCard({
   request,
   updating,
   compact = false,
+  pendingDecisionStatus,
+  onUndo,
   onApprove,
   onDecline,
 }: {
   request: InstructorRequest;
   updating: boolean;
   compact?: boolean;
+  pendingDecisionStatus: "approved" | "declined" | null;
+  onUndo: () => void;
   onApprove: () => void;
   onDecline: () => void;
 }) {
@@ -413,26 +470,45 @@ function RequestCard({
       )}
 
       {!compact && request.status === "pending" && (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            disabled={updating}
-            onClick={onDecline}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-card px-5 py-3 text-base font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-          >
-            <X className="size-4" />
-            Decline
-          </button>
-          <button
-            type="button"
-            disabled={updating}
-            onClick={onApprove}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-base font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-          >
-            <Check className="size-4" />
-            Approve
-          </button>
-        </div>
+        <>
+          {pendingDecisionStatus && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-amber-100">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="leading-6">
+                  {pendingDecisionStatus === "approved" ? "Approval" : "Decline"} is queued and will be sent in a few seconds.
+                  If this was a mistake, undo it now.
+                </p>
+                <button
+                  type="button"
+                  onClick={onUndo}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+                >
+                  Undo action
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={updating || Boolean(pendingDecisionStatus)}
+              onClick={onDecline}
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-card px-5 py-3 text-base font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+            >
+              <X className="size-4" />
+              Decline
+            </button>
+            <button
+              type="button"
+              disabled={updating || Boolean(pendingDecisionStatus)}
+              onClick={onApprove}
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-base font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+            >
+              <Check className="size-4" />
+              Approve
+            </button>
+          </div>
+        </>
       )}
     </article>
   );

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
@@ -22,6 +21,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 type Availability = {
   id: string;
@@ -57,6 +57,11 @@ type OccupiedSlot = {
   id: string;
   availability_id: string;
   instructor_id: string;
+  requested_start_datetime: string;
+  requested_end_datetime: string;
+};
+
+type CalendarBlocker = {
   requested_start_datetime: string;
   requested_end_datetime: string;
 };
@@ -103,7 +108,15 @@ export function StudentConsultationWorkspace({
   const [selectedAvailability, setSelectedAvailability] = useState<SelectedAvailability | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const pendingRequests = studentRequests.filter((request) => request.status === "pending").length;
-  const upcomingRequests = studentRequests.filter((request) => request.status === "approved").length;
+  const approvedRequests = studentRequests.filter((request) => request.status === "approved");
+  const upcomingConsultations = approvedRequests
+    .filter((request) => new Date(request.requested_end_datetime) >= new Date())
+    .sort(
+      (first, second) =>
+        new Date(first.requested_start_datetime).getTime() -
+        new Date(second.requested_start_datetime).getTime(),
+    );
+  const nextConsultation = upcomingConsultations[0] ?? null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -242,7 +255,7 @@ export function StudentConsultationWorkspace({
       <SessionTimeout />
       <DashboardHeader />
 
-      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
         <div className="flex flex-col justify-between gap-5 border-b border-border pb-8 sm:flex-row sm:items-end">
           <div>
             <p className="text-sm font-medium text-muted-foreground">Student dashboard</p>
@@ -263,7 +276,7 @@ export function StudentConsultationWorkspace({
         </div>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <SummaryCard icon={CalendarRange} label="Approved consultations" value={String(upcomingRequests)} />
+          <SummaryCard icon={CalendarRange} label="Upcoming consultations" value={String(upcomingConsultations.length)} />
           <SummaryCard icon={ClipboardList} label="Pending requests" value={String(pendingRequests)} />
           <SummaryCard
             icon={UserRound}
@@ -273,10 +286,13 @@ export function StudentConsultationWorkspace({
           />
         </section>
 
+        <UpcomingConsultationCard request={nextConsultation} />
+
         <section id="calendar" className={`mt-8 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}>
           <CalendarPanel
             locked={!profileComplete}
             availability={availableWindows}
+            requests={studentRequests}
             profile={profile}
             occupiedSlots={occupiedConsultations}
             onSelectAvailability={setSelectedAvailability}
@@ -349,7 +365,7 @@ export function StudentConsultationWorkspace({
 function DashboardHeader() {
   return (
     <header className="border-t-4 border-primary border-b border-border bg-card">
-      <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-5 sm:gap-5 sm:px-8 lg:px-12">
         <Link href="/dashboard/student" className="font-semibold tracking-tight" aria-label="Refresh student dashboard">
           <BrandLogo />
         </Link>
@@ -357,15 +373,28 @@ function DashboardHeader() {
           <nav className="mr-3 hidden items-center gap-7 text-sm text-muted-foreground lg:flex">
             <a href="#calendar" className="font-medium text-primary">Dashboard</a>
             <a href="#calendar" className="transition hover:text-foreground">Consultations</a>
+            <Link href="/dashboard/student/history" className="transition hover:text-foreground">History</Link>
             <a href="/onboarding" className="transition hover:text-foreground">My profile</a>
           </nav>
-          <button className="hidden size-10 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:text-foreground sm:flex" aria-label="Notifications">
-            <Bell className="size-4" />
-          </button>
+          <NotificationBell role="student" />
           <ThemeToggle />
           <LogoutButton />
         </div>
       </div>
+      <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
+        <Link href="/dashboard/student" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
+          Dashboard
+        </Link>
+        <Link href="/dashboard/student#calendar" className="shrink-0 rounded-full border border-border px-4 py-2">
+          Consultations
+        </Link>
+        <Link href="/dashboard/student/history" className="shrink-0 rounded-full border border-border px-4 py-2">
+          History
+        </Link>
+        <Link href="/onboarding" className="shrink-0 rounded-full border border-border px-4 py-2">
+          My profile
+        </Link>
+      </nav>
     </header>
   );
 }
@@ -382,7 +411,7 @@ function SummaryCard({
   tone?: "default" | "success" | "warning";
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-muted-foreground">{label}</p>
         <Icon className="size-7 text-primary" />
@@ -397,20 +426,95 @@ function SummaryCard({
   );
 }
 
+function UpcomingConsultationCard({ request }: { request: ConsultationRequest | null }) {
+  if (!request) {
+    return (
+      <section className="mt-6 rounded-2xl border border-dashed border-border bg-card p-6 sm:p-7">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Upcoming consultation</p>
+            <h2 className="mt-1 text-2xl font-medium tracking-tight">No confirmed schedule yet</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Approved consultation requests will appear here clearly once an instructor confirms one.
+            </p>
+          </div>
+          <Link
+            href="#calendar"
+            className="inline-flex items-center justify-center rounded-full border border-border px-5 py-3 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+          >
+            Find a time
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  const start = new Date(request.requested_start_datetime);
+  const end = new Date(request.requested_end_datetime);
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-3xl border border-primary/25 bg-primary text-primary-foreground shadow-xl shadow-primary/10">
+      <div className="grid gap-0 lg:grid-cols-[1fr_0.42fr]">
+        <div className="p-6 sm:p-8">
+          <div className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
+            Confirmed consultation
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Your next consultation is scheduled.
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-primary-foreground/80">
+            This request has been approved by the instructor. Prepare your concern details before the meeting time.
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-white/12 p-4">
+              <p className="text-xs text-primary-foreground/70">Date</p>
+              <p className="mt-2 text-sm font-semibold">
+                {start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/12 p-4">
+              <p className="text-xs text-primary-foreground/70">Time</p>
+              <p className="mt-2 text-sm font-semibold">
+                {timeLabel(start)} - {timeLabel(end)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/12 p-4">
+              <p className="text-xs text-primary-foreground/70">Purpose</p>
+              <p className="mt-2 text-sm font-semibold capitalize">{request.concern_type}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-center border-t border-white/15 bg-white/10 p-6 lg:border-l lg:border-t-0">
+          <Link
+            href="/dashboard/student/history"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-white/90"
+          >
+            View details
+            <ChevronRight className="size-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CalendarPanel({
   locked,
   availability,
+  requests,
   profile,
   occupiedSlots,
   onSelectAvailability,
 }: {
   locked: boolean;
   availability: Availability[];
+  requests: ConsultationRequest[];
   profile: StudentProfile | null;
   occupiedSlots: OccupiedSlot[];
   onSelectAvailability: (selection: SelectedAvailability) => void;
 }) {
   const studentProgram = profile?.program ?? null;
+  const pendingRequests = requests.filter((request) => request.status === "pending");
   const visibleAvailability = useMemo(
     () =>
       availability.filter((item) => {
@@ -433,7 +537,7 @@ function CalendarPanel({
     setWeekStart(startOfWeek(new Date()));
   }
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-8">
+    <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm text-muted-foreground">Consultation calendar</p>
@@ -451,7 +555,7 @@ function CalendarPanel({
 
       <div className={`transition ${locked ? "select-none blur-[2px]" : ""}`} aria-hidden={locked}>
         <div className="mt-5 overflow-x-auto rounded-xl border border-border">
-          <div className="min-w-[760px]">
+          <div className="min-w-[680px] sm:min-w-[760px]">
             <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-border bg-muted/20">
               <div />
               {weekDays.map((day) => <div key={day.toISOString()} className={`border-l border-border px-2 py-3 text-center ${isSameDay(day, new Date()) ? "bg-primary/10" : ""}`}><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{day.toLocaleDateString(undefined, { weekday: "short" })}</p><p className={`mt-1 text-sm font-medium ${isSameDay(day, new Date()) ? "text-primary" : ""}`}>{day.getDate()}</p></div>)}
@@ -472,7 +576,14 @@ function CalendarPanel({
                           slot.availability_id === item.id &&
                           requestTouchesDay(slot, day),
                       );
-                      return buildFreeSegments(dayWindow.start, dayWindow.end, occupiedForWindow).map((segment) => ({
+                      const pendingForWindow = pendingRequests.filter(
+                        (request) =>
+                          request.availability_id === item.id &&
+                          consultationRequestTouchesDay(request, day),
+                      );
+                      const unavailableForWindow = [...occupiedForWindow, ...pendingForWindow];
+
+                      return buildFreeSegments(dayWindow.start, dayWindow.end, unavailableForWindow).map((segment) => ({
                         availability: item,
                         freeStart: segment.start,
                         freeEnd: segment.end,
@@ -487,6 +598,19 @@ function CalendarPanel({
                         freeStart={slot.freeStart}
                         freeEnd={slot.freeEnd}
                         onSelect={onSelectAvailability}
+                      />
+                    ))}
+                  {pendingRequests
+                    .filter((request) => consultationRequestTouchesDay(request, day))
+                    .sort(
+                      (first, second) =>
+                        new Date(first.requested_start_datetime).getTime() -
+                        new Date(second.requested_start_datetime).getTime(),
+                    )
+                    .map((request) => (
+                      <StudentPendingRequestSlot
+                        key={`${request.id}-${day.toISOString()}`}
+                        request={request}
                       />
                     ))}
                 </div>
@@ -572,6 +696,36 @@ function StudentRequestableSlot({
   );
 }
 
+function StudentPendingRequestSlot({ request }: { request: ConsultationRequest }) {
+  const start = new Date(request.requested_start_datetime);
+  const end = new Date(request.requested_end_datetime);
+  const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
+  const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
+  const top = (startHour - 7) * 64;
+  const height = Math.max(34, (endHour - startHour) * 64);
+
+  return (
+    <div
+      className="absolute inset-x-1 z-20 flex flex-col justify-center overflow-hidden rounded-lg border border-amber-300/80 bg-amber-50/95 px-3 py-2 text-left text-xs text-amber-950 shadow-sm backdrop-blur-sm dark:border-amber-300/40 dark:bg-amber-300/20 dark:text-amber-50"
+      style={{ top, height }}
+      title="Pending instructor review"
+    >
+      <span className="inline-flex w-fit items-center rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900 dark:bg-amber-200/20 dark:text-amber-50">
+        Pending
+      </span>
+      <span className="mt-2 block font-semibold leading-tight">
+        Awaiting review
+      </span>
+      <span className="mt-1 block font-medium leading-tight">
+        {timeLabel(start)} - {timeLabel(end)}
+      </span>
+      <span className="mt-1 block truncate text-[11px] leading-tight text-amber-800/80 capitalize dark:text-amber-50/80">
+        {request.concern_type}
+      </span>
+    </div>
+  );
+}
+
 function RequestConsultationModal({
   availability,
   freeStart,
@@ -638,7 +792,7 @@ function RequestConsultationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <form
         onSubmit={submit}
-        className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl sm:p-7"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-2xl sm:p-7"
       >
         <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
           <div>
@@ -754,6 +908,7 @@ function addDays(date: Date, amount: number) { const result = new Date(date); re
 function isSameDay(first: Date, second: Date) { return first.toDateString() === second.toDateString(); }
 function eventTouchesDay(availability: Availability, day: Date) { const start = new Date(availability.start_datetime); const end = new Date(availability.end_datetime); const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()); const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1); return start < dayEnd && end > dayStart; }
 function requestTouchesDay(slot: OccupiedSlot, day: Date) { const start = new Date(slot.requested_start_datetime); const end = new Date(slot.requested_end_datetime); const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()); const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1); return start < dayEnd && end > dayStart; }
+function consultationRequestTouchesDay(request: ConsultationRequest, day: Date) { const start = new Date(request.requested_start_datetime); const end = new Date(request.requested_end_datetime); const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()); const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1); return start < dayEnd && end > dayStart; }
 function localDateKey(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -790,7 +945,7 @@ function buildTimeOptions(start: Date, end: Date) {
 
   return options;
 }
-function buildFreeSegments(start: Date, end: Date, occupiedSlots: OccupiedSlot[]) {
+function buildFreeSegments(start: Date, end: Date, occupiedSlots: CalendarBlocker[]) {
   const occupied = occupiedSlots
     .map((slot) => ({
       start: new Date(Math.max(start.getTime(), new Date(slot.requested_start_datetime).getTime())),

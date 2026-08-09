@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, ClipboardList, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -28,6 +29,8 @@ export function StudentHistoryPanel({
 }: {
   initialRequests: StudentHistoryRequest[];
 }) {
+  const searchParams = useSearchParams();
+  const selectedRequestId = searchParams.get("request");
   const [requests, setRequests] = useState(initialRequests);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -42,6 +45,30 @@ export function StudentHistoryPanel({
     () => filteredRequests.slice((safePage - 1) * pageSize, safePage * pageSize),
     [filteredRequests, safePage],
   );
+
+  useEffect(() => {
+    if (!selectedRequestId) return;
+    const timer = window.setTimeout(() => {
+      const selectedIndex = filteredRequests.findIndex((request) => request.id === selectedRequestId);
+      if (selectedIndex < 0) return;
+      const selectedPage = Math.floor(selectedIndex / pageSize) + 1;
+      if (selectedPage !== page) {
+        setPage(selectedPage);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [filteredRequests, page, selectedRequestId]);
+
+  useEffect(() => {
+    if (!selectedRequestId) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`request-${selectedRequestId}`)?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [currentRequests, selectedRequestId]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -83,7 +110,7 @@ export function StudentHistoryPanel({
   }, []);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+    <section className="rounded-2xl border border-border bg-card p-4 sm:p-8">
       <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-start">
         <div>
           <p className="text-sm text-muted-foreground">Consultation records</p>
@@ -118,7 +145,11 @@ export function StudentHistoryPanel({
             <>
               <div className="mt-6 space-y-4">
                 {currentRequests.map((request) => (
-                  <HistoryCard key={request.id} request={request} />
+                  <HistoryCard
+                    key={request.id}
+                    request={request}
+                    selected={request.id === selectedRequestId}
+                  />
                 ))}
               </div>
               <Pagination
@@ -150,14 +181,26 @@ export function StudentHistoryPanel({
   );
 }
 
-function HistoryCard({ request }: { request: StudentHistoryRequest }) {
+function HistoryCard({ request, selected }: { request: StudentHistoryRequest; selected: boolean }) {
   const instructor =
     request.instructor?.full_name?.trim() ||
     request.instructor?.email?.split("@")[0] ||
     "Instructor";
 
   return (
-    <article className="rounded-2xl border border-border bg-background/60 p-5">
+    <article
+      id={`request-${request.id}`}
+      className={`rounded-2xl border p-5 transition ${
+        selected
+          ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-2 ring-primary/25"
+          : "border-border bg-background/60"
+      }`}
+    >
+      {selected && (
+        <div className="mb-4 inline-flex rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+          Selected request
+        </div>
+      )}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -212,16 +255,16 @@ function Pagination({
   onNext: () => void;
 }) {
   return (
-    <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+    <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
         {totalItems} result{totalItems === 1 ? "" : "s"} · Page {page} of {totalPages}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
         <button
           type="button"
           onClick={onPrevious}
           disabled={page === 1}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-sm transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
         >
           <ChevronLeft className="size-4" />
           Previous
@@ -230,7 +273,7 @@ function Pagination({
           type="button"
           onClick={onNext}
           disabled={page === totalPages}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-sm transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
         >
           Next
           <ChevronRight className="size-4" />
