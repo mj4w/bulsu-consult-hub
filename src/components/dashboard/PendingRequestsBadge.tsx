@@ -9,6 +9,7 @@ export function PendingRequestsBadge() {
 
   useEffect(() => {
     const supabase = createClient();
+    const channelName = `pending-requests-badge-${Math.random().toString(36).slice(2)}`;
 
     async function refreshCount() {
       const {
@@ -27,17 +28,24 @@ export function PendingRequestsBadge() {
 
     void refreshCount();
 
-    const channel = supabase
-      .channel("pending-requests-badge")
-      .on("postgres_changes", { event: "*", schema: "public", table: "consultation_requests" }, refreshCount)
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on("postgres_changes", { event: "*", schema: "public", table: "consultation_requests" }, refreshCount)
+        .subscribe();
+    } catch (error) {
+      console.error("Pending requests realtime failed:", error);
+    }
 
     const interval = window.setInterval(refreshCount, 10000);
     const refreshOnFocus = () => refreshCount();
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
       window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
