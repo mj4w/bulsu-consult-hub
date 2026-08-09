@@ -12,16 +12,31 @@ export function SessionTimeout() {
   const router = useRouter();
 
   useEffect(() => {
-    const storedStart = window.localStorage.getItem(SESSION_KEY);
-    const startedAt = storedStart ? Number(storedStart) : Date.now();
+    let storedStart: string | null = null;
+    try {
+      storedStart = window.localStorage.getItem(SESSION_KEY);
+    } catch {
+      storedStart = null;
+    }
+
+    const parsedStart = storedStart ? Number(storedStart) : NaN;
+    const startedAt = Number.isFinite(parsedStart) ? parsedStart : Date.now();
 
     if (!storedStart) {
-      window.localStorage.setItem(SESSION_KEY, String(startedAt));
+      try {
+        window.localStorage.setItem(SESSION_KEY, String(startedAt));
+      } catch {
+        // Ignore storage failures.
+      }
     }
 
     const remainingTime = Math.max(0, startedAt + SESSION_DURATION - Date.now());
     const timeout = window.setTimeout(async () => {
-      window.localStorage.removeItem(SESSION_KEY);
+      try {
+        window.localStorage.removeItem(SESSION_KEY);
+      } catch {
+        // Ignore storage failures.
+      }
       await createClient().auth.signOut();
       router.replace("/");
       router.refresh();

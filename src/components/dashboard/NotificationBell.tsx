@@ -78,8 +78,14 @@ export function NotificationBell({ role }: { role?: UserRole }) {
   useEffect(() => {
     if (!storageKey) return;
     const timer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem(storageKey);
-      setReadKeys(saved ? JSON.parse(saved) as string[] : []);
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        const parsed = saved ? JSON.parse(saved) : [];
+        setReadKeys(Array.isArray(parsed) ? parsed as string[] : []);
+      } catch {
+        window.localStorage.removeItem(storageKey);
+        setReadKeys([]);
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [storageKey]);
@@ -143,7 +149,11 @@ export function NotificationBell({ role }: { role?: UserRole }) {
   function saveReadKeys(nextKeys: string[]) {
     setReadKeys(nextKeys);
     if (storageKey) {
-      window.localStorage.setItem(storageKey, JSON.stringify(nextKeys));
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextKeys));
+      } catch {
+        // Ignore storage failures. The badge can still work for the current render.
+      }
     }
   }
 
