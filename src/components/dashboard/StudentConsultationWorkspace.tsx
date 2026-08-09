@@ -500,6 +500,15 @@ export function StudentConsultationWorkspace({
           onSelect={(request) => setSelectedApprovedConsultation(request)}
         />
 
+        <PendingConsultationsCard
+          requests={studentRequests.filter(
+            (request) => request.status === "pending",
+          )}
+          onSelect={(request) =>
+            setSelectedApprovedConsultation(request)
+          }
+        />
+
         <section
           id="calendar"
           className={`mt-8 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}
@@ -833,6 +842,129 @@ function UpcomingConsultationCard({
   );
 }
 
+function PendingConsultationsCard({
+  requests,
+  onSelect,
+}: {
+  requests: ConsultationRequest[];
+  onSelect: (request: ConsultationRequest) => void;
+}) {
+  if (!requests.length) {
+    return null;
+  }
+
+  return (
+    <section className="mt-6 rounded-3xl border border-amber-500/20 bg-card p-6 shadow-sm sm:p-7">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="text-sm font-medium text-amber-600">
+            Pending requests
+          </p>
+
+          <h2 className="mt-1 text-2xl font-medium tracking-tight">
+            Waiting for instructor review
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Click a request to see its complete details.
+          </p>
+        </div>
+
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-semibold text-amber-700 dark:text-amber-300">
+          {requests.length}
+        </div>
+      </div>
+
+      <div className="mt-6 divide-y divide-border overflow-hidden rounded-2xl border border-border">
+        {requests.map((request) => {
+          const start = new Date(
+            request.requested_start_datetime,
+          );
+
+          const end = new Date(
+            request.requested_end_datetime,
+          );
+
+          const instructorName =
+            request.instructor?.full_name?.trim() ||
+            request.instructor?.email?.split("@")[0] ||
+            "Instructor";
+
+          const concern = {
+            research: "Research",
+            grades: "Grades",
+            projects: "Projects",
+            others: "Others",
+          }[request.concern_type];
+
+          const mode =
+            request.availability?.consultation_mode === "f2f"
+              ? "Face-to-face"
+              : request.availability?.consultation_mode ===
+                  "online"
+                ? "Online"
+                : request.availability?.consultation_mode ===
+                    "both"
+                  ? "Face-to-face / Online"
+                  : "Consultation";
+
+          return (
+            <button
+              key={request.id}
+              type="button"
+              onClick={() => onSelect(request)}
+              className="group flex w-full flex-col gap-4 bg-card p-5 text-left transition hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    Pending
+                  </span>
+
+                  <span className="text-xs text-muted-foreground">
+                    {concern}
+                  </span>
+                </div>
+
+                <p className="mt-2 truncate font-medium">
+                  {instructorName}
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {start.toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                  {" · "}
+                  {start.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  {" - "}
+                  {end.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {mode}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-primary">
+                View details
+                <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 function CalendarPanel({
   locked,
   availability,

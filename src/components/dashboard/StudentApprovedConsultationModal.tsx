@@ -16,6 +16,11 @@ import { createClient } from "@/lib/supabase/client";
 
 type ConsultationMode = "f2f" | "online" | "both";
 type ConcernType = "research" | "grades" | "projects" | "others";
+type ConsultationStatus =
+  | "pending"
+  | "approved"
+  | "declined"
+  | "cancelled";
 
 export type ApprovedConsultation = {
   id: string;
@@ -25,7 +30,7 @@ export type ApprovedConsultation = {
   requested_end_datetime: string;
   concern_type: ConcernType;
   message: string;
-  status: "pending" | "approved" | "declined" | "cancelled";
+  status: ConsultationStatus;
   decision_note: string | null;
   created_at: string;
   instructor?: {
@@ -45,7 +50,7 @@ type Props = {
   onToast: (message: string, tone: "success" | "error") => void;
 };
 
-const EDIT_CUTOFF_HOURS = 24;
+const CANCELLATION_CUTOFF_HOURS = 24;
 
 function hoursUntil(startDateTime: string) {
   return (
@@ -54,10 +59,11 @@ function hoursUntil(startDateTime: string) {
   );
 }
 
-function canModifyConsultation(request: ApprovedConsultation) {
+function canCancelConsultation(request: ApprovedConsultation) {
   return (
     request.status === "approved" &&
-    hoursUntil(request.requested_start_datetime) > EDIT_CUTOFF_HOURS
+    hoursUntil(request.requested_start_datetime) >
+      CANCELLATION_CUTOFF_HOURS
   );
 }
 
@@ -93,6 +99,31 @@ function concernLabel(concern: ConcernType) {
   }[concern];
 }
 
+function statusLabel(status: ConsultationStatus) {
+  return {
+    pending: "Pending",
+    approved: "Approved",
+    declined: "Declined",
+    cancelled: "Cancelled",
+  }[status];
+}
+
+function statusClass(status: ConsultationStatus) {
+  if (status === "approved") {
+    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  }
+
+  if (status === "pending") {
+    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+
+  if (status === "declined") {
+    return "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  }
+
+  return "bg-muted text-muted-foreground";
+}
+
 export function StudentApprovedConsultationModal({
   request,
   onClose,
@@ -112,7 +143,9 @@ export function StudentApprovedConsultationModal({
   );
   const [message, setMessage] = useState(request.message);
 
-  const canModify = canModifyConsultation(request);
+  const isApproved = request.status === "approved";
+  const canCancel = canCancelConsultation(request);
+
   const remainingHours = Math.max(
     0,
     hoursUntil(request.requested_start_datetime),
@@ -126,11 +159,7 @@ export function StudentApprovedConsultationModal({
   }, [request]);
 
   async function saveChanges() {
-    if (!canModify) {
-      onToast(
-        "This consultation can no longer be edited because it is within 24 hours.",
-        "error",
-      );
+    if (!isApproved) {
       return;
     }
 
@@ -191,9 +220,9 @@ export function StudentApprovedConsultationModal({
   }
 
   async function cancelConsultation() {
-    if (!canModify) {
+    if (!canCancel) {
       onToast(
-        "This consultation can no longer be cancelled because it is within 24 hours.",
+        "This consultation can only be cancelled more than 24 hours before it starts.",
         "error",
       );
       return;
@@ -202,10 +231,10 @@ export function StudentApprovedConsultationModal({
     setCancelling(true);
 
     const { error } = await supabase.rpc(
-        "cancel_student_consultation",
-        {
-            request_id: request.id,
-        },
+      "cancel_student_consultation",
+      {
+        request_id: request.id,
+      },
     );
 
     setCancelling(false);
@@ -233,20 +262,31 @@ export function StudentApprovedConsultationModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="approved-consultation-title"
+        aria-labelledby="consultation-details-title"
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-7">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Approved consultation
+              Consultation request
             </p>
-            <h2
-              id="approved-consultation-title"
-              className="mt-1 text-xl font-semibold tracking-tight"
-            >
-              Consultation details
-            </h2>
+
+            <div className="mt-2 flex items-center gap-2">
+              <h2
+                id="consultation-details-title"
+                className="text-xl font-semibold tracking-tight"
+              >
+                Consultation details
+              </h2>
+
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                  request.status,
+                )}`}
+              >
+                {statusLabel(request.status)}
+              </span>
+            </div>
           </div>
 
           <button
@@ -270,11 +310,14 @@ export function StudentApprovedConsultationModal({
                 <p className="text-sm font-medium text-muted-foreground">
                   Scheduled for
                 </p>
+
                 <p className="mt-1 text-lg font-semibold">
                   {formatDate(request.requested_start_datetime)}
                 </p>
+
                 <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="size-4" />
+
                   {formatTime(request.requested_start_datetime)} -{" "}
                   {formatTime(request.requested_end_datetime)}
                 </p>
@@ -318,7 +361,9 @@ export function StudentApprovedConsultationModal({
                 <select
                   value={concernType}
                   onChange={(event) =>
-                    setConcernType(event.target.value as ConcernType)
+                    setConcernType(
+                      event.target.value as ConcernType,
+                    )
                   }
                   className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
                 >
@@ -336,7 +381,9 @@ export function StudentApprovedConsultationModal({
 
                 <textarea
                   value={message}
-                  onChange={(event) => setMessage(event.target.value)}
+                  onChange={(event) =>
+                    setMessage(event.target.value)
+                  }
                   rows={5}
                   className="mt-2 w-full resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm leading-6 outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
                   placeholder="Describe what you want to discuss..."
@@ -379,73 +426,119 @@ export function StudentApprovedConsultationModal({
             </div>
           )}
 
-          {!canModify && !editing && (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
-              <strong>Changes are locked.</strong> This consultation starts
-              in less than 24 hours, so editing and cancellation are no longer
-              available.
-            </div>
-          )}
-
-          {canModify && !editing && !confirmCancel && (
-            <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
-              >
-                <Edit3 className="size-4" />
-                Edit consultation
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setConfirmCancel(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 px-5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-500/10"
-              >
-                <X className="size-4" />
-                Cancel consultation
-              </button>
-            </div>
-          )}
-
-          {confirmCancel && (
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
-              <p className="font-medium">Cancel this consultation?</p>
-
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                This will release the scheduled consultation slot. You can
-                only cancel consultations that are more than 24 hours away.
+          {request.decision_note && (
+            <div className="rounded-2xl border border-border bg-muted/30 p-5">
+              <p className="text-sm font-medium">
+                Instructor note
               </p>
 
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setConfirmCancel(false)}
-                  disabled={cancelling}
-                  className="rounded-full border border-border px-5 py-2.5 text-sm font-medium"
-                >
-                  Keep consultation
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => void cancelConsultation()}
-                  disabled={cancelling}
-                  className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  {cancelling ? "Cancelling..." : "Yes, cancel"}
-                </button>
-              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {request.decision_note}
+              </p>
             </div>
           )}
 
-          {!editing && canModify && !confirmCancel && (
-            <p className="text-center text-xs text-muted-foreground">
-              Changes and cancellation close 24 hours before the consultation.
-              You currently have approximately{" "}
-              {Math.floor(remainingHours)} hours remaining.
-            </p>
+          {request.status === "pending" && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
+              <strong>Waiting for instructor review.</strong>{" "}
+              Your consultation request has been submitted and is
+              waiting for the instructor to approve or decline it.
+            </div>
+          )}
+
+          {request.status === "declined" && (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm leading-6 text-rose-800 dark:text-rose-200">
+              This consultation request was declined by the
+              instructor.
+            </div>
+          )}
+
+          {request.status === "cancelled" && (
+            <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+              This consultation has been cancelled.
+            </div>
+          )}
+
+          {isApproved && (
+            <>
+              {!canCancel && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
+                  <strong>Cancellation is locked.</strong>{" "}
+                  This consultation starts in less than 24 hours.
+                  You can no longer cancel it.
+                </div>
+              )}
+
+              {canCancel && (
+                <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  You currently have approximately{" "}
+                  <strong>
+                    {Math.floor(remainingHours)} hours
+                  </strong>{" "}
+                  before the consultation. Cancellation is available
+                  until the 24-hour cutoff.
+                </div>
+              )}
+
+              {!editing && !confirmCancel && (
+                <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <Edit3 className="size-4" />
+                    Edit consultation
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(true)}
+                    disabled={!canCancel}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 px-5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <X className="size-4" />
+                    Cancel consultation
+                  </button>
+                </div>
+              )}
+
+              {confirmCancel && canCancel && (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
+                  <p className="font-medium">
+                    Cancel this consultation?
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    This will cancel your approved consultation.
+                    The time slot may become available again to
+                    other students.
+                  </p>
+
+                  <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmCancel(false)}
+                      disabled={cancelling}
+                      className="rounded-full border border-border px-5 py-2.5 text-sm font-medium"
+                    >
+                      Keep consultation
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void cancelConsultation()}
+                      disabled={cancelling}
+                      className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {cancelling
+                        ? "Cancelling..."
+                        : "Yes, cancel"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -469,7 +562,9 @@ function DetailItem({
         {label}
       </div>
 
-      <p className="mt-2 text-sm font-medium">{value}</p>
+      <p className="mt-2 text-sm font-medium">
+        {value}
+      </p>
     </div>
   );
 }
