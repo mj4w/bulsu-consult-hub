@@ -16,6 +16,9 @@ const neutral = localFont({
 export const metadata: Metadata = {
   title: "Consultation Scheduler | Bulacan State University",
   description: "A simple way for Bulacan State University students to connect with instructors.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
