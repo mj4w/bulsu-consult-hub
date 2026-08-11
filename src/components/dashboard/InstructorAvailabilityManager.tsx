@@ -2,14 +2,19 @@
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
+  CalendarCheck,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  MapPin,
+  Monitor,
+  Pencil,
   Plus,
+  SquareSplitHorizontal,
   Trash2,
   UserRound,
-  Video,
   X,
 } from "lucide-react";
 
@@ -55,6 +60,8 @@ export type OccupiedConsultation = {
   requested_start_datetime: string;
   requested_end_datetime: string;
   concern_type: "research" | "grades" | "projects" | "others";
+  message?: string | null;
+  decision_note?: string | null;
   student?: {
     full_name: string | null;
     email: string | null;
@@ -119,7 +126,7 @@ export function InstructorAvailabilityManager({
 
       const { data, error: refreshError } = await supabase
         .from("consultation_requests")
-        .select("id, requested_start_datetime, requested_end_datetime, concern_type, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+        .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
         .eq("instructor_id", user.id)
         .eq("status", "approved")
         .order("requested_start_datetime", { ascending: true });
@@ -291,6 +298,98 @@ export function InstructorAvailabilityManager({
     setMessage("Consultation window closed. Approved schedules were kept.");
   }
 
+  async function rescheduleConsultation(
+    request: OccupiedConsultation,
+    nextStart: string,
+    nextEnd: string,
+  ) {
+    setError("");
+    setMessage("");
+
+    if (new Date(request.requested_end_datetime).getTime() <= Date.now()) {
+      setError("Past approved consultations are view-only.");
+      return false;
+    }
+
+    if (!nextStart || !nextEnd || new Date(nextEnd) <= new Date(nextStart)) {
+      setError("Choose a valid start and end time.");
+      return false;
+    }
+
+    const { data, error: updateError } = await createClient()
+      .from("consultation_requests")
+      .update({
+        requested_start_datetime: new Date(nextStart).toISOString(),
+        requested_end_datetime: new Date(nextEnd).toISOString(),
+        decision_note: "Rescheduled by instructor.",
+      })
+      .eq("id", request.id)
+      .eq("status", "approved")
+      .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+      .maybeSingle();
+
+    if (updateError) {
+      setError(updateError.message || "Could not reschedule consultation.");
+      return false;
+    }
+
+    if (!data) {
+      setError("This consultation is no longer approved.");
+      return false;
+    }
+
+    const updated = normalizeOccupiedConsultations([data])[0];
+    setOccupiedConsultations((current) =>
+      current
+        .map((item) => (item.id === updated.id ? updated : item))
+        .sort(byConsultationStart),
+    );
+    setOccupiedDetails(updated);
+    setMessage("Consultation rescheduled.");
+    return true;
+  }
+
+  async function cancelConsultation(request: OccupiedConsultation) {
+    if (new Date(request.requested_end_datetime).getTime() <= Date.now()) {
+      setError("Past approved consultations are view-only.");
+      return;
+    }
+
+    if (!window.confirm("Cancel this approved consultation? The student will see it as cancelled.")) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    const { data, error: updateError } = await createClient()
+      .from("consultation_requests")
+      .update({
+        status: "cancelled",
+        decision_note: "Cancelled by instructor.",
+      })
+      .eq("id", request.id)
+      .eq("status", "approved")
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) {
+      setError(updateError.message || "Could not cancel consultation.");
+      return;
+    }
+
+    if (!data) {
+      setError("This consultation is no longer approved.");
+      return;
+    }
+
+    setOccupiedConsultations((current) =>
+      current.filter((item) => item.id !== request.id),
+    );
+    setOccupiedDetails(null);
+    setMessage("Consultation cancelled.");
+  }
+
   return (
     <section className="rounded-2xl border border-border bg-card p-4 sm:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -314,6 +413,10 @@ export function InstructorAvailabilityManager({
           <Plus className="size-4" /> Add consultation window
         </button>
       </div>
+      <NextConsultationBanner
+        consultations={occupiedConsultations}
+        onOpenDetails={setOccupiedDetails}
+      />
       <CalendarGrid
         key={selectionResetToken}
         items={items}
@@ -356,6 +459,8 @@ export function InstructorAvailabilityManager({
         <OccupiedDetails
           request={occupiedDetails}
           onClose={() => setOccupiedDetails(null)}
+          onCancel={() => void cancelConsultation(occupiedDetails)}
+          onReschedule={rescheduleConsultation}
         />
       )}
     </section>
@@ -737,11 +842,13 @@ function CalendarGrid({
                       new Date(first.requested_start_datetime).getTime() -
                       new Date(second.requested_start_datetime).getTime(),
                   )
-                  .map((request) => (
+                  .map((request, index, requestsForDay) => (
                     <OccupiedConsultationEvent
                       key={`${request.id}-${day.toISOString()}`}
                       request={request}
                       day={day}
+                      lane={index}
+                      laneCount={requestsForDay.length}
                       onOpenDetails={onOpenOccupiedDetails}
                     />
                   ))}
@@ -751,6 +858,96 @@ function CalendarGrid({
         </div>
       </div>
     </div>
+  );
+}
+
+function NextConsultationBanner({
+  consultations,
+  onOpenDetails,
+}: {
+  consultations: OccupiedConsultation[];
+  onOpenDetails: (request: OccupiedConsultation) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const upcoming = consultations
+    .filter((request) => {
+      if (!now) return true;
+      return new Date(request.requested_end_datetime).getTime() >= now;
+    })
+    .sort(byConsultationStart);
+  const next = upcoming[0];
+
+  if (!next) {
+    return (
+      <section className="mt-6 rounded-2xl border border-dashed border-border bg-muted/20 p-4 sm:p-5">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">
+              Next approved consultation
+            </p>
+            <h3 className="mt-1 text-xl font-medium tracking-tight">
+              No confirmed student schedule yet
+            </h3>
+          </div>
+          <CalendarCheck className="size-7 text-muted-foreground" />
+        </div>
+      </section>
+    );
+  }
+
+  const start = new Date(next.requested_start_datetime);
+  const end = new Date(next.requested_end_datetime);
+  const remaining = Math.max(0, start.getTime() - now);
+  const remainingHours = Math.floor(remaining / 3_600_000);
+  const remainingMinutes = Math.max(
+    0,
+    Math.round((remaining % 3_600_000) / 60_000),
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenDetails(next)}
+      className="mt-6 block w-full rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-transparent p-4 text-left transition hover:border-primary/40 hover:bg-primary/15 sm:p-5"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-primary">
+            Next approved consultation
+          </p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight">
+            {studentName(next)}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {dateLabel(start, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}{" "}
+            at {dateLabel(start, { hour: "numeric", minute: "2-digit" })} -{" "}
+            {dateLabel(end, { hour: "numeric", minute: "2-digit" })}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <Clock className="size-5 text-primary" />
+          <div>
+            <p className="text-xs text-muted-foreground">Starts in</p>
+            <p className="text-sm font-semibold">
+              {remainingHours > 0
+                ? `${remainingHours}h ${remainingMinutes}m`
+                : `${remainingMinutes}m`}
+            </p>
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -880,7 +1077,11 @@ function MonthCalendar({
                     }}
                     className="block w-full rounded-lg border border-primary/30 bg-primary/10 px-2 py-1 text-left text-xs text-foreground transition hover:bg-primary/20"
                   >
-                    <span className="block font-semibold">
+                    <span className="flex items-center gap-1 font-semibold">
+                      <ConsultationModeIcon
+                        mode={event.availability.consultation_mode}
+                        className="size-3"
+                      />
                       {event.availability.consultation_mode === "f2f" ? "F2F" : event.availability.consultation_mode === "online" ? "Online" : "Both"}
                     </span>
                     <span className="block">
@@ -938,7 +1139,7 @@ function InstructorAvailabilityEvent({
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
   const top = (startHour - 7) * 64;
-  const height = Math.max(34, (endHour - startHour) * 64);
+  const height = Math.max(76, (endHour - startHour) * 64);
   const gap = 4;
   const laneWidth = 100 / laneCount;
   const width = `calc(${laneWidth}% - ${gap}px)`;
@@ -953,7 +1154,10 @@ function InstructorAvailabilityEvent({
       style={{ top, height, left, width }}
       className="calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
     >
-      <span className="block font-semibold">{format}</span>
+      <span className="flex items-center gap-1 font-semibold">
+        <ConsultationModeIcon mode={event.consultation_mode} className="size-3" />
+        {format}
+      </span>
       <span className="block truncate">{dailyTime}</span>
     </button>
   );
@@ -962,10 +1166,14 @@ function InstructorAvailabilityEvent({
 function OccupiedConsultationEvent({
   request,
   day,
+  lane,
+  laneCount,
   onOpenDetails,
 }: {
   request: OccupiedConsultation;
   day: Date;
+  lane: number;
+  laneCount: number;
   onOpenDetails: (request: OccupiedConsultation) => void;
 }) {
   if (!requestTouchesDay(request, day)) return null;
@@ -975,9 +1183,13 @@ function OccupiedConsultationEvent({
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
   const top = (startHour - 7) * 64;
-  const height = Math.max(34, (endHour - startHour) * 64);
+  const height = Math.max(76, (endHour - startHour) * 64);
   const time = `${dateLabel(start, { hour: "numeric", minute: "2-digit" })} - ${dateLabel(end, { hour: "numeric", minute: "2-digit" })}`;
   const colors = programColorClasses(request.student?.program);
+  const gap = 4;
+  const laneWidth = 100 / laneCount;
+  const width = `calc(${laneWidth}% - ${gap}px)`;
+  const left = `calc(${lane * laneWidth}% + ${gap / 2}px)`;
 
   return (
     <button
@@ -985,12 +1197,12 @@ function OccupiedConsultationEvent({
       title={`Occupied by ${studentName(request)}`}
       onClick={() => onOpenDetails(request)}
       onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
-      style={{ top, height }}
-      className={`absolute inset-x-2 z-20 flex flex-col justify-center overflow-hidden rounded-lg border px-2 py-1.5 text-left text-xs text-white shadow-sm transition ${colors.solid}`}
+      style={{ top, height, left, width }}
+      className={`absolute z-20 flex flex-col justify-center overflow-hidden rounded-lg border px-2 py-1.5 text-left text-xs text-white shadow-sm transition ${colors.solid}`}
     >
       <span className="flex items-center gap-1 font-semibold">
         <UserRound className="size-3" />
-        Occupied
+        Approved
       </span>
       <span className="block truncate">{time}</span>
       <span className="mt-1 block truncate text-[11px] text-white/90">
@@ -1092,7 +1304,7 @@ function AvailabilityEditor({
               onClick={() => onModeChange(value)}
               className={`rounded-xl border px-4 py-3 text-left text-sm ${mode === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}
             >
-              <Video className="mb-2 size-4" />
+              <ConsultationModeIcon mode={value} className="mb-2 size-4" />
               {label}
             </button>
           ))}
@@ -1233,20 +1445,42 @@ function AvailabilityDetails({
 function OccupiedDetails({
   request,
   onClose,
+  onCancel,
+  onReschedule,
 }: {
   request: OccupiedConsultation;
   onClose: () => void;
+  onCancel: () => void;
+  onReschedule: (
+    request: OccupiedConsultation,
+    nextStart: string,
+    nextEnd: string,
+  ) => Promise<boolean>;
 }) {
   const start = new Date(request.requested_start_datetime);
   const end = new Date(request.requested_end_datetime);
+  const [now] = useState(() => Date.now());
+  const isPast = end.getTime() <= now;
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [nextStart, setNextStart] = useState(localDateTime(start));
+  const [nextEnd, setNextEnd] = useState(localDateTime(end));
+
+  async function submitReschedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    const saved = await onReschedule(request, nextStart, nextEnd);
+    setSaving(false);
+    if (saved) setEditing(false);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">
-              Occupied consultation
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-600">
+              Approved consultation
             </p>
             <h3 className="mt-2 text-xl font-medium">{studentName(request)}</h3>
           </div>
@@ -1259,43 +1493,159 @@ function OccupiedDetails({
             ×
           </button>
         </div>
-        <div className="mt-6 space-y-4 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">Schedule</p>
-            <p className="mt-1 font-medium">
-              {dateLabel(start, { weekday: "long", month: "long", day: "numeric", year: "numeric" })},{" "}
-              {dateLabel(start, { hour: "numeric", minute: "2-digit" })} - {dateLabel(end, { hour: "numeric", minute: "2-digit" })}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Concern</p>
-            <p className="mt-1 font-medium capitalize">{request.concern_type}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Student details</p>
-            <p className="mt-1 font-medium">
-              {request.student?.program ?? "Program not set"}
-            </p>
-            {request.student?.section && (
-              <p className="text-muted-foreground">{request.student.section}</p>
+
+        {editing ? (
+          <form className="mt-6 space-y-4" onSubmit={submitReschedule}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="New start">
+                <input
+                  className="profile-input"
+                  type="datetime-local"
+                  value={nextStart}
+                  onChange={(event) => setNextStart(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="New end">
+                <input
+                  className="profile-input"
+                  type="datetime-local"
+                  value={nextEnd}
+                  onChange={(event) => setNextEnd(event.target.value)}
+                  required
+                />
+              </Field>
+            </div>
+            <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setNextStart(localDateTime(start));
+                  setNextEnd(localDateTime(end));
+                  setEditing(false);
+                }}
+                disabled={saving}
+                className="rounded-full border border-border px-5 py-3 text-sm text-muted-foreground"
+              >
+                Cancel edit
+              </button>
+              <button
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save new schedule"}
+                <Check className="size-4" />
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <DetailBlock label="Schedule">
+                {dateLabel(start, {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+                <br />
+                {dateLabel(start, { hour: "numeric", minute: "2-digit" })} -{" "}
+                {dateLabel(end, { hour: "numeric", minute: "2-digit" })}
+              </DetailBlock>
+              <DetailBlock label="Concern">
+                <span className="capitalize">{request.concern_type}</span>
+              </DetailBlock>
+              <DetailBlock label="Program">
+                {request.student?.program ?? "Program not set"}
+              </DetailBlock>
+              <DetailBlock label="Section">
+                {request.student?.section ?? "Section not set"}
+              </DetailBlock>
+            </div>
+
+            {request.message && (
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Student concern
+                </p>
+                <p className="mt-2">{request.message}</p>
+              </div>
             )}
+
             {request.student?.email && (
-              <p className="text-muted-foreground">{request.student.email}</p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                {request.student.email}
+              </p>
             )}
-          </div>
-        </div>
-        <div className="mt-7 flex justify-end border-t border-border pt-5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground"
-          >
-            Done
-          </button>
-        </div>
+
+            {isPast && (
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
+                This approved consultation has already ended. It is kept as a
+                view-only record.
+              </div>
+            )}
+
+            <div className="mt-7 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+              {!isPast && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                  >
+                    <Trash2 className="size-4" />
+                    Cancel consultation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <Pencil className="size-4" />
+                    Reschedule
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+function DetailBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="mt-2 font-medium leading-6">{children}</div>
+    </div>
+  );
+}
+
+function ConsultationModeIcon({
+  mode,
+  className = "size-4",
+}: {
+  mode: Availability["consultation_mode"];
+  className?: string;
+}) {
+  if (mode === "online") return <Monitor className={className} />;
+  if (mode === "f2f") return <MapPin className={className} />;
+  return <SquareSplitHorizontal className={className} />;
 }
 
 function Toast({ message, tone, onClose }: { message: string; tone: "success" | "error"; onClose: () => void }) {
@@ -1305,7 +1655,7 @@ function Toast({ message, tone, onClose }: { message: string; tone: "success" | 
   }, [message, onClose]);
 
   return (
-    <div className={`toast-enter fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-xl ${tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`} role="status">
+    <div className={`toast-enter fixed bottom-5 right-5 z-[200] flex max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-xl ${tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`} role="status">
       <p className="flex-1 leading-5">{message}</p>
       <button type="button" onClick={onClose} className="rounded-full p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100" aria-label="Dismiss notification">
         <X className="size-4" />
@@ -1341,6 +1691,15 @@ function studentName(request: OccupiedConsultation) {
     request.student?.full_name?.trim() ||
     request.student?.email?.split("@")[0] ||
     "Student"
+  );
+}
+function byConsultationStart(
+  first: OccupiedConsultation,
+  second: OccupiedConsultation,
+) {
+  return (
+    new Date(first.requested_start_datetime).getTime() -
+    new Date(second.requested_start_datetime).getTime()
   );
 }
 function normalizeOccupiedConsultations(

@@ -5,12 +5,14 @@ import {
   Clock,
   Edit3,
   Mail,
+  MapPin,
   MessageSquare,
+  Monitor,
+  SquareSplitHorizontal,
   UserRound,
-  Video,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -42,6 +44,18 @@ export type ApprovedConsultation = {
   } | null;
 };
 
+type ApprovedConsultationRow = Omit<
+  ApprovedConsultation,
+  "instructor" | "availability"
+> & {
+  instructor?:
+    | ApprovedConsultation["instructor"][]
+    | ApprovedConsultation["instructor"];
+  availability?:
+    | ApprovedConsultation["availability"][]
+    | ApprovedConsultation["availability"];
+};
+
 type Props = {
   request: ApprovedConsultation;
   onClose: () => void;
@@ -51,6 +65,25 @@ type Props = {
 };
 
 const CANCELLATION_CUTOFF_HOURS = 24;
+const consultationRequestSelect = `
+  id,
+  availability_id,
+  instructor_id,
+  requested_start_datetime,
+  requested_end_datetime,
+  concern_type,
+  message,
+  status,
+  decision_note,
+  created_at,
+  instructor:profiles!consultation_requests_instructor_id_fkey(
+    full_name,
+    email
+  ),
+  availability:instructor_availability!consultation_requests_availability_id_fkey(
+    consultation_mode
+  )
+`;
 
 function hoursUntil(startDateTime: string) {
   return (
@@ -62,9 +95,18 @@ function hoursUntil(startDateTime: string) {
 function canCancelConsultation(request: ApprovedConsultation) {
   return (
     request.status === "approved" &&
+    hoursUntil(request.requested_end_datetime) > 0 &&
     hoursUntil(request.requested_start_datetime) >
       CANCELLATION_CUTOFF_HOURS
   );
+}
+
+function hasConsultationEnded(request: ApprovedConsultation) {
+  return hoursUntil(request.requested_end_datetime) <= 0;
+}
+
+function canEditRequest(request: ApprovedConsultation) {
+  return request.status === "pending";
 }
 
 function formatDate(value: string) {
@@ -84,9 +126,9 @@ function formatTime(value: string) {
 }
 
 function modeLabel(mode?: ConsultationMode | null) {
-  if (mode === "f2f") return "Face-to-face";
+  if (mode === "f2f") return "F2F";
   if (mode === "online") return "Online";
-  if (mode === "both") return "Face-to-face / Online";
+  if (mode === "both") return "F2F / Online";
   return "Consultation";
 }
 
@@ -144,6 +186,11 @@ export function StudentApprovedConsultationModal({
   const [message, setMessage] = useState(request.message);
 
   const isApproved = request.status === "approved";
+  const isPending = request.status === "pending";
+  const isPastApproved =
+    isApproved &&
+    hasConsultationEnded(request);
+  const canEdit = canEditRequest(request);
   const canCancel = canCancelConsultation(request);
 
   const remainingHours = Math.max(
@@ -151,15 +198,9 @@ export function StudentApprovedConsultationModal({
     hoursUntil(request.requested_start_datetime),
   );
 
-  useEffect(() => {
-    setConcernType(request.concern_type);
-    setMessage(request.message);
-    setEditing(false);
-    setConfirmCancel(false);
-  }, [request]);
-
   async function saveChanges() {
-    if (!isApproved) {
+    if (!canEdit) {
+      onToast("Only pending requests can be edited.", "error");
       return;
     }
 
@@ -170,53 +211,93 @@ export function StudentApprovedConsultationModal({
 
     setSaving(true);
 
-    const { data, error } = await supabase
+    const { data, error: updateError } = await supabase
       .from("consultation_requests")
       .update({
         concern_type: concernType,
         message: message.trim(),
       })
       .eq("id", request.id)
-      .eq("status", "approved")
-      .select(
-        `
-          id,
-          availability_id,
-          instructor_id,
-          requested_start_datetime,
-          requested_end_datetime,
-          concern_type,
-          message,
-          status,
-          decision_note,
-          created_at,
-          instructor:profiles!consultation_requests_instructor_id_fkey(
-            full_name,
-            email
-          ),
-          availability:instructor_availability!consultation_requests_availability_id_fkey(
-            consultation_mode
-          )
-        `,
-      )
-      .single();
+      .eq("status", "pending")
+      .select(consultationRequestSelect)
+      .maybeSingle();
 
-    setSaving(false);
-
-    if (error || !data) {
+    if (updateError) {
+      setSaving(false);
       onToast(
-        error?.message || "Could not update the consultation.",
+        updateError.message || "Could not update the consultation.",
         "error",
       );
       return;
     }
 
-    const updatedRequest = normalizeRequest(data);
+    if (!data) {
+      const { data: latestRequest } = await supabase
+        .from("consultation_requests")
+        .select(consultationRequestSelect)
+        .eq("id", request.id)
+        .maybeSingle();
+
+      setSaving(false);
+
+      if (latestRequest) {
+        onUpdated(normalizeRequest(latestRequest as ApprovedConsultationRow));
+      }
+
+      onToast(
+        "This request is no longer pending, so it cannot be edited.",
+        "error",
+      );
+      return;
+    }
+
+    setSaving(false);
+
+    const updatedRequest = normalizeRequest(data as ApprovedConsultationRow);
 
     onUpdated(updatedRequest);
     setEditing(false);
 
     onToast("Consultation details updated.", "success");
+  }
+
+  async function cancelPendingRequest() {
+    if (!isPending) {
+      onToast("Only pending requests can be cancelled here.", "error");
+      return;
+    }
+
+    setCancelling(true);
+
+    const { data, error } = await supabase
+      .from("consultation_requests")
+      .update({
+        status: "cancelled",
+        decision_note: "Cancelled by student before instructor review.",
+      })
+      .eq("id", request.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+
+    setCancelling(false);
+
+    if (error) {
+      onToast(error.message || "Could not cancel the request.", "error");
+      return;
+    }
+
+    if (!data) {
+      onToast(
+        "This request was already reviewed. Refreshing the dashboard.",
+        "error",
+      );
+      return;
+    }
+
+    onCancelled(request.id);
+    onToast("Pending request cancelled.", "success");
+    onClose();
   }
 
   async function cancelConsultation() {
@@ -230,18 +311,30 @@ export function StudentApprovedConsultationModal({
 
     setCancelling(true);
 
-    const { error } = await supabase.rpc(
-      "cancel_student_consultation",
-      {
-        request_id: request.id,
-      },
-    );
+    const { data, error } = await supabase
+      .from("consultation_requests")
+      .update({
+        status: "cancelled",
+        decision_note: "Cancelled by student.",
+      })
+      .eq("id", request.id)
+      .eq("status", "approved")
+      .select("id")
+      .maybeSingle();
 
     setCancelling(false);
 
     if (error) {
       onToast(
         error.message || "Could not cancel the consultation.",
+        "error",
+      );
+      return;
+    }
+
+    if (!data) {
+      onToast(
+        "This consultation could not be cancelled. It may already be changed or inside the 24-hour cutoff.",
         "error",
       );
       return;
@@ -339,7 +432,7 @@ export function StudentApprovedConsultationModal({
             />
 
             <DetailItem
-              icon={Video}
+              icon={modeIcon(request.availability?.consultation_mode)}
               label="Consultation mode"
               value={modeLabel(request.availability?.consultation_mode)}
             />
@@ -439,11 +532,69 @@ export function StudentApprovedConsultationModal({
           )}
 
           {request.status === "pending" && (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
-              <strong>Waiting for instructor review.</strong>{" "}
-              Your consultation request has been submitted and is
-              waiting for the instructor to approve or decline it.
-            </div>
+            <>
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
+                <strong>Waiting for instructor review.</strong>{" "}
+                Your consultation request has been submitted and is
+                waiting for the instructor to approve or decline it.
+              </div>
+
+              {!editing && !confirmCancel && (
+                <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <Edit3 className="size-4" />
+                    Edit concern details
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 px-5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <X className="size-4" />
+                    Cancel request
+                  </button>
+                </div>
+              )}
+
+              {confirmCancel && (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
+                  <p className="font-medium">
+                    Cancel this request?
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    This will withdraw your pending consultation request before the instructor reviews it.
+                  </p>
+
+                  <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmCancel(false)}
+                      disabled={cancelling}
+                      className="rounded-full border border-border px-5 py-2.5 text-sm font-medium"
+                    >
+                      Keep request
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void cancelPendingRequest()}
+                      disabled={cancelling}
+                      className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {cancelling
+                        ? "Cancelling..."
+                        : "Yes, cancel"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {request.status === "declined" && (
@@ -461,7 +612,14 @@ export function StudentApprovedConsultationModal({
 
           {isApproved && (
             <>
-              {!canCancel && (
+              {isPastApproved && (
+                <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+                  <strong>This consultation is completed.</strong>{" "}
+                  Past approved consultations are kept as view-only records.
+                </div>
+              )}
+
+              {!isPastApproved && !canCancel && (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
                   <strong>Cancellation is locked.</strong>{" "}
                   This consultation starts in less than 24 hours.
@@ -469,7 +627,7 @@ export function StudentApprovedConsultationModal({
                 </div>
               )}
 
-              {canCancel && (
+              {!isPastApproved && canCancel && (
                 <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   You currently have approximately{" "}
                   <strong>
@@ -482,15 +640,6 @@ export function StudentApprovedConsultationModal({
 
               {!editing && !confirmCancel && (
                 <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
-                  >
-                    <Edit3 className="size-4" />
-                    Edit consultation
-                  </button>
-
                   <button
                     type="button"
                     onClick={() => setConfirmCancel(true)}
@@ -569,15 +718,14 @@ function DetailItem({
   );
 }
 
+function modeIcon(mode?: ConsultationMode | null) {
+  if (mode === "online") return Monitor;
+  if (mode === "f2f") return MapPin;
+  return SquareSplitHorizontal;
+}
+
 function normalizeRequest(
-  request: ApprovedConsultation & {
-    instructor?:
-      | ApprovedConsultation["instructor"][]
-      | ApprovedConsultation["instructor"];
-    availability?:
-      | ApprovedConsultation["availability"][]
-      | ApprovedConsultation["availability"];
-  },
+  request: ApprovedConsultationRow,
 ): ApprovedConsultation {
   return {
     ...request,

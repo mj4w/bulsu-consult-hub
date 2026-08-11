@@ -140,16 +140,28 @@ export function InstructorRequestsPanel({
 
     setUpdatingId(requestId);
 
-    const { error } = await supabase
+    const { data: updatedRequest, error } = await supabase
       .from("consultation_requests")
       .update({
         status,
         decision_note: status === "approved" ? approvedNote : declinedNote,
       })
-      .eq("id", requestId);
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       setToast({ message: error.message || "Could not update request.", tone: "error" });
+      setUpdatingId(null);
+      return;
+    }
+
+    if (!updatedRequest) {
+      setToast({
+        message: "This request was already changed. The list will refresh automatically.",
+        tone: "error",
+      });
       setUpdatingId(null);
       return;
     }
@@ -388,7 +400,7 @@ async function getCurrentInstructorName() {
     .from("profiles")
     .select("full_name, email")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   return (
     profile?.full_name?.trim() ||

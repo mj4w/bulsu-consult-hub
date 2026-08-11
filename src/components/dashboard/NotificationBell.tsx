@@ -15,6 +15,7 @@ type RequestNotification = {
   requested_end_datetime: string;
   concern_type: "research" | "grades" | "projects" | "others";
   status: "pending" | "approved" | "declined" | "cancelled";
+  decision_note: string | null;
   updated_at: string;
   created_at: string;
   student?: { full_name: string | null; email: string | null } | null;
@@ -99,21 +100,30 @@ export function NotificationBell({ role }: { role?: UserRole }) {
         resolvedRole === "student"
           ? supabase
               .from("consultation_requests")
-              .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, updated_at, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email)")
+              .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, decision_note, updated_at, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email)")
               .eq("student_id", userId)
-              .in("status", ["approved", "declined"])
+              .in("status", ["approved", "declined", "cancelled"])
               .order("updated_at", { ascending: false })
               .limit(15)
           : supabase
               .from("consultation_requests")
-              .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, updated_at, created_at, student:profiles!consultation_requests_student_id_fkey(full_name, email)")
+              .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, decision_note, updated_at, created_at, student:profiles!consultation_requests_student_id_fkey(full_name, email)")
               .eq("instructor_id", userId)
               .eq("status", "pending")
               .order("created_at", { ascending: false })
               .limit(15);
 
       const { data } = await query;
-      const nextNotifications = normalizeRows((data ?? []) as RequestNotificationRow[]);
+      const nextNotifications = normalizeRows(
+        (data ?? []) as RequestNotificationRow[],
+      ).filter(
+        (notification) =>
+          resolvedRole !== "student" ||
+          notification.status !== "cancelled" ||
+          notification.decision_note
+            ?.toLowerCase()
+            .includes("cancelled by instructor"),
+      );
       setNotifications(nextNotifications);
 
       const nextUnreadCount = nextNotifications.filter(
@@ -121,7 +131,7 @@ export function NotificationBell({ role }: { role?: UserRole }) {
       ).length;
 
       if (initialized.current && nextUnreadCount > previousUnreadCount.current) {
-        setToast(resolvedRole === "student" ? "Your consultation request has a new result." : "New consultation request received.");
+        setToast(resolvedRole === "student" ? "Your consultation schedule has a new update." : "New consultation request received.");
       }
 
       previousUnreadCount.current = nextUnreadCount;
@@ -290,6 +300,8 @@ function shortRequestId(id: string) {
 
 function notificationTitle(notification: RequestNotification, role: UserRole | null) {
   if (role === "instructor") return "New request for review";
+  if (notification.status === "cancelled") return "Consultation cancelled";
+  if (isRescheduledByInstructor(notification)) return "Schedule rescheduled";
   if (notification.status === "approved") return "Request approved";
   if (notification.status === "declined") return "Request declined";
   return "Request updated";
@@ -302,7 +314,23 @@ function notificationBody(notification: RequestNotification, role: UserRole | nu
   }
 
   const instructor = notification.instructor?.full_name?.trim() || notification.instructor?.email?.split("@")[0] || "Your instructor";
+
+  if (notification.status === "cancelled") {
+    return `${instructor} cancelled your approved ${concernLabel(notification.concern_type)} consultation.`;
+  }
+
+  if (isRescheduledByInstructor(notification)) {
+    return `${instructor} rescheduled your approved ${concernLabel(notification.concern_type)} consultation.`;
+  }
+
   return `${instructor} ${notification.status === "approved" ? "approved" : "declined"} your ${concernLabel(notification.concern_type)} consultation.`;
+}
+
+function isRescheduledByInstructor(notification: RequestNotification) {
+  return (
+    notification.status === "approved" &&
+    notification.decision_note?.toLowerCase().includes("rescheduled by instructor")
+  );
 }
 
 function concernLabel(concern: RequestNotification["concern_type"]) {

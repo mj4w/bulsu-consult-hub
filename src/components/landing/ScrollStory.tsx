@@ -11,7 +11,7 @@ const steps = [
     color: "#4f46e5",
     label: "Availability",
     date: "Aug 12",
-    time: "5:00â€“6:00 PM",
+    time: "5:00-6:00 PM",
     format: "Online",
   },
   {
@@ -21,7 +21,7 @@ const steps = [
     color: "#0f9f7a",
     label: "Request",
     date: "Aug 14",
-    time: "10:00â€“11:00 AM",
+    time: "10:00-11:00 AM",
     format: "F2F",
   },
   {
@@ -31,16 +31,16 @@ const steps = [
     color: "#f97360",
     label: "Confirmed",
     date: "Aug 18",
-    time: "2:30â€“3:30 PM",
+    time: "2:30-3:30 PM",
     format: "Both available",
   },
 ];
 
 
 const availabilityExamples = [
-  { date: "Aug 12", time: "5:00â€“6:00 PM", format: "Online" },
-  { date: "Aug 15", time: "9:30â€“10:30 AM", format: "F2F" },
-  { date: "Aug 20", time: "1:00â€“2:00 PM", format: "Both available" },
+  { date: "Aug 12", time: "5:00-6:00 PM", format: "Online" },
+  { date: "Aug 15", time: "9:30-10:30 AM", format: "F2F" },
+  { date: "Aug 20", time: "1:00-2:00 PM", format: "Both available" },
 ];
 
 export function ScrollStory() {
@@ -159,4 +159,5 @@ function ScheduleDetail({
     </div>
   );
 }
+
 

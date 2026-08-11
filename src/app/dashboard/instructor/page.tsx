@@ -68,7 +68,7 @@ export default async function InstructorDashboardPage() {
   }>;
   const { data: requestData, error: requestError } = await supabase
     .from("consultation_requests")
-    .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+    .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
     .eq("instructor_id", user.id)
     .order("created_at", { ascending: false });
 

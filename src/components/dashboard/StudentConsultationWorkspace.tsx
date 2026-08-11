@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,9 +10,12 @@ import {
   ClipboardList,
   GraduationCap,
   LockKeyhole,
+  MapPin,
   Maximize2,
   Minimize2,
+  Monitor,
   Send,
+  SquareSplitHorizontal,
   X,
   UserRound,
 } from "lucide-react";
@@ -114,15 +117,7 @@ type RequestableSlot = {
   laneCount: number;
 };
 
-type PendingRequestSlot = {
-  request: ConsultationRequest;
-  start: Date;
-  end: Date;
-  lane: number;
-  laneCount: number;
-};
-
-type ApprovedRequestSlot = {
+type StudentRequestSlot = {
   request: ConsultationRequest;
   start: Date;
   end: Date;
@@ -132,8 +127,7 @@ type ApprovedRequestSlot = {
 
 type StudentCalendarLayout = {
   availabilitySlots: RequestableSlot[];
-  pendingSlots: PendingRequestSlot[];
-  approvedSlots: ApprovedRequestSlot[];
+  requestSlots: StudentRequestSlot[];
 };
 
 function readableCalendarBlockHeight(
@@ -305,11 +299,15 @@ export function StudentConsultationWorkspace({
         return;
       }
 
-      setStudentRequests(
-        normalizeConsultationRequestRows(
-          (data ?? []) as ConsultationRequestRow[],
-        ),
+      const nextRequests = normalizeConsultationRequestRows(
+        (data ?? []) as ConsultationRequestRow[],
       );
+
+      setStudentRequests(nextRequests);
+      setSelectedApprovedConsultation((current) => {
+        if (!current) return current;
+        return nextRequests.find((request) => request.id === current.id) ?? null;
+      });
     }
 
     async function refreshOccupiedSlots({
@@ -438,6 +436,41 @@ export function StudentConsultationWorkspace({
     return true;
   }
 
+  function handleApprovedConsultationUpdated(
+    updatedRequest: ApprovedConsultation,
+  ) {
+    setStudentRequests((current) =>
+      current.map((request) =>
+        request.id === updatedRequest.id
+          ? {
+              ...request,
+              ...updatedRequest,
+            }
+          : request,
+      ),
+    );
+
+    setSelectedApprovedConsultation(updatedRequest);
+    router.refresh();
+  }
+
+  function handleApprovedConsultationCancelled(requestId: string) {
+    setStudentRequests((current) =>
+      current.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              status: "cancelled",
+              decision_note: "Cancelled by student.",
+            }
+          : request,
+      ),
+    );
+
+    setSelectedApprovedConsultation(null);
+    router.refresh();
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <SessionTimeout />
@@ -500,15 +533,6 @@ export function StudentConsultationWorkspace({
           onSelect={(request) => setSelectedApprovedConsultation(request)}
         />
 
-        <PendingConsultationsCard
-          requests={studentRequests.filter(
-            (request) => request.status === "pending",
-          )}
-          onSelect={(request) =>
-            setSelectedApprovedConsultation(request)
-          }
-        />
-
         <section
           id="calendar"
           className={`mt-8 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}
@@ -520,6 +544,7 @@ export function StudentConsultationWorkspace({
             profile={profile}
             occupiedSlots={occupiedConsultations}
             onSelectAvailability={setSelectedAvailability}
+            onSelectRequest={setSelectedApprovedConsultation}
           />
           {!profileComplete && <ProfileStatusPanel complete={false} />}
         </section>
@@ -589,6 +614,7 @@ export function StudentConsultationWorkspace({
       )}
       {selectedApprovedConsultation && (
         <StudentApprovedConsultationModal
+          key={`${selectedApprovedConsultation.id}-${selectedApprovedConsultation.status}-${selectedApprovedConsultation.concern_type}-${selectedApprovedConsultation.message}`}
           request={selectedApprovedConsultation}
           onClose={() => setSelectedApprovedConsultation(null)}
           onUpdated={handleApprovedConsultationUpdated}
@@ -842,129 +868,6 @@ function UpcomingConsultationCard({
   );
 }
 
-function PendingConsultationsCard({
-  requests,
-  onSelect,
-}: {
-  requests: ConsultationRequest[];
-  onSelect: (request: ConsultationRequest) => void;
-}) {
-  if (!requests.length) {
-    return null;
-  }
-
-  return (
-    <section className="mt-6 rounded-3xl border border-amber-500/20 bg-card p-6 shadow-sm sm:p-7">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <p className="text-sm font-medium text-amber-600">
-            Pending requests
-          </p>
-
-          <h2 className="mt-1 text-2xl font-medium tracking-tight">
-            Waiting for instructor review
-          </h2>
-
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Click a request to see its complete details.
-          </p>
-        </div>
-
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-semibold text-amber-700 dark:text-amber-300">
-          {requests.length}
-        </div>
-      </div>
-
-      <div className="mt-6 divide-y divide-border overflow-hidden rounded-2xl border border-border">
-        {requests.map((request) => {
-          const start = new Date(
-            request.requested_start_datetime,
-          );
-
-          const end = new Date(
-            request.requested_end_datetime,
-          );
-
-          const instructorName =
-            request.instructor?.full_name?.trim() ||
-            request.instructor?.email?.split("@")[0] ||
-            "Instructor";
-
-          const concern = {
-            research: "Research",
-            grades: "Grades",
-            projects: "Projects",
-            others: "Others",
-          }[request.concern_type];
-
-          const mode =
-            request.availability?.consultation_mode === "f2f"
-              ? "Face-to-face"
-              : request.availability?.consultation_mode ===
-                  "online"
-                ? "Online"
-                : request.availability?.consultation_mode ===
-                    "both"
-                  ? "Face-to-face / Online"
-                  : "Consultation";
-
-          return (
-            <button
-              key={request.id}
-              type="button"
-              onClick={() => onSelect(request)}
-              className="group flex w-full flex-col gap-4 bg-card p-5 text-left transition hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                    Pending
-                  </span>
-
-                  <span className="text-xs text-muted-foreground">
-                    {concern}
-                  </span>
-                </div>
-
-                <p className="mt-2 truncate font-medium">
-                  {instructorName}
-                </p>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {start.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                  {" · "}
-                  {start.toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                  {" - "}
-                  {end.toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {mode}
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-primary">
-                View details
-                <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 function CalendarPanel({
   locked,
   availability,
@@ -972,6 +875,7 @@ function CalendarPanel({
   profile,
   occupiedSlots,
   onSelectAvailability,
+  onSelectRequest,
 }: {
   locked: boolean;
   availability: Availability[];
@@ -979,13 +883,14 @@ function CalendarPanel({
   profile: StudentProfile | null;
   occupiedSlots: OccupiedSlot[];
   onSelectAvailability: (selection: SelectedAvailability) => void;
+  onSelectRequest: (request: ConsultationRequest) => void;
 }) {
   const studentProgram = profile?.program ?? null;
   const pendingRequests = requests.filter(
     (request) => request.status === "pending",
   );
-  const approvedRequests = requests.filter(
-    (request) => request.status === "approved",
+  const visibleStudentRequests = requests.filter(
+    (request) => request.status === "pending" || request.status === "approved",
   );
   const visibleAvailability = useMemo(
     () =>
@@ -1222,10 +1127,7 @@ function CalendarPanel({
                 const dayKey = localDateKey(day);
                 const dayLayout = layoutStudentCalendarDay({
                   availabilitySlots: requestableSlotsByDay.get(dayKey) ?? [],
-                  pendingRequests: pendingRequests.filter((request) =>
-                    consultationRequestTouchesDay(request, day),
-                  ),
-                  approvedRequests: approvedRequests.filter((request) =>
+                  requests: visibleStudentRequests.filter((request) =>
                     consultationRequestTouchesDay(request, day),
                   ),
                 });
@@ -1246,16 +1148,11 @@ function CalendarPanel({
                         onSelect={onSelectAvailability}
                       />
                     ))}
-                    {dayLayout.pendingSlots.map((slot) => (
-                      <StudentPendingRequestSlot
+                    {dayLayout.requestSlots.map((slot) => (
+                      <StudentCalendarRequestSlot
                         key={`${slot.request.id}-${day.toISOString()}`}
                         slot={slot}
-                      />
-                    ))}
-                    {dayLayout.approvedSlots.map((slot) => (
-                      <StudentApprovedRequestSlot
-                        key={`${slot.request.id}-${day.toISOString()}`}
-                        slot={slot}
+                        onSelect={onSelectRequest}
                       />
                     ))}
                   </div>
@@ -1330,13 +1227,19 @@ function StudentAvailabilityEvent({
       style={{ top, height }}
       title={format}
     >
-      <span className="block font-semibold">{format}</span>
+      <span className="flex items-center gap-1 font-semibold">
+        <ConsultationModeIcon
+          mode={availability.consultation_mode}
+          className="size-3"
+        />
+        {format}
+      </span>
       <span className="block truncate">
         {start.toLocaleTimeString(undefined, {
           hour: "numeric",
           minute: "2-digit",
         })}{" "}
-        –{" "}
+        -{" "}
         {end.toLocaleTimeString(undefined, {
           hour: "numeric",
           minute: "2-digit",
@@ -1401,7 +1304,11 @@ function StudentRequestableSlot({
       }}
       title={`${format} with ${professor}`}
     >
-      <span className="block whitespace-normal break-words font-semibold">
+      <span className="flex items-center gap-1 whitespace-normal break-words font-semibold">
+        <ConsultationModeIcon
+          mode={slot.availability.consultation_mode}
+          className="size-3"
+        />
         {format}
       </span>
       <span className="block whitespace-normal break-words">
@@ -1414,64 +1321,13 @@ function StudentRequestableSlot({
   );
 }
 
-function StudentPendingRequestSlot({ slot }: { slot: PendingRequestSlot }) {
-  const { request, start, end } = slot;
-  const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
-  const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
-  const top = (startHour - 7) * 64;
-  const timeHeight = Math.max(34, (endHour - startHour) * 64);
-  const gap = 4;
-  const laneWidth = 100 / slot.laneCount;
-  const width = `calc(${laneWidth}% - ${gap}px)`;
-  const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
-  const timeRange = `${timeLabel(start)} - ${timeLabel(end)}`;
-  const height = readableCalendarBlockHeight(
-    timeHeight,
-    ["Pending", "Awaiting review", timeRange, request.concern_type],
-    slot.laneCount,
-  );
-  const compact = height < 64;
-  const roomy = height >= 92;
-
-  return (
-    <div
-      className={`absolute z-20 overflow-hidden rounded-lg border border-amber-400/80 bg-amber-300/75 text-left text-amber-950 shadow-[0_14px_28px_-18px_rgba(180,83,9,0.75)] backdrop-blur-md transition dark:border-amber-300/60 dark:bg-amber-400/70 dark:text-amber-950 ${
-        compact
-          ? "flex items-center gap-1.5 px-2 py-1 text-[10px]"
-          : "flex flex-col justify-center px-3 py-2 text-xs"
-      }`}
-      style={{ top, height, left, width }}
-      title="Pending instructor review"
-    >
-      <span
-        className={`inline-flex w-fit items-center rounded-full bg-white/70 font-bold uppercase text-amber-900 shadow-sm dark:bg-amber-100/80 dark:text-amber-950 ${
-          compact
-            ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]"
-            : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
-        }`}
-      >
-        Pending
-      </span>
-      <span
-        className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}
-      >
-        Awaiting review
-      </span>
-      <span
-        className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}
-      >
-        {timeRange}
-      </span>
-      {roomy && (
-        <span className="mt-1 block whitespace-normal break-words text-[11px] leading-tight text-amber-900/85 capitalize dark:text-amber-950/80">
-          {request.concern_type}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function StudentApprovedRequestSlot({ slot }: { slot: ApprovedRequestSlot }) {
+function StudentCalendarRequestSlot({
+  slot,
+  onSelect,
+}: {
+  slot: StudentRequestSlot;
+  onSelect: (request: ConsultationRequest) => void;
+}) {
   const { request, start, end } = slot;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
@@ -1483,38 +1339,56 @@ function StudentApprovedRequestSlot({ slot }: { slot: ApprovedRequestSlot }) {
   const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
   const format = request.availability?.consultation_mode
     ? consultationModeLabel(request.availability.consultation_mode)
-    : "Confirmed";
+    : "Consultation";
   const timeRange = `${timeLabel(start)} - ${timeLabel(end)}`;
+  const status = request.status === "approved" ? "Approved" : "Pending";
+  const isApproved = request.status === "approved";
   const height = readableCalendarBlockHeight(
     timeHeight,
-    ["Approved", format, timeRange, request.concern_type],
+    [status, format, timeRange, request.concern_type],
     slot.laneCount,
   );
-  const compact = height < 64;
+  const compact = height < 68;
   const roomy = height >= 92;
 
   return (
-    <div
-      className={`absolute z-30 overflow-hidden rounded-lg border border-emerald-400/80 bg-emerald-500/75 text-left text-white shadow-[0_14px_28px_-18px_rgba(5,150,105,0.82)] backdrop-blur-md dark:border-emerald-300/60 dark:bg-emerald-400/70 dark:text-emerald-950 ${
+    <button
+      type="button"
+      onClick={() => onSelect(request)}
+      className={`absolute z-30 overflow-hidden rounded-lg border text-left shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-primary/20 ${
+        isApproved
+          ? "border-emerald-300/80 bg-emerald-500/90 text-white dark:border-emerald-300/60 dark:bg-emerald-400/80 dark:text-emerald-950"
+          : "border-amber-300/80 bg-amber-300/90 text-amber-950 dark:border-amber-300/60 dark:bg-amber-400/80"
+      } ${
         compact
           ? "flex items-center gap-1.5 px-2 py-1 text-[10px]"
           : "flex flex-col justify-center px-3 py-2 text-xs"
       }`}
       style={{ top, height, left, width }}
-      title="Approved consultation"
+      title={`${status} consultation details`}
     >
       <span
-        className={`inline-flex w-fit items-center rounded-full bg-white/25 font-bold uppercase text-white shadow-sm dark:bg-emerald-100/80 dark:text-emerald-950 ${
+        className={`inline-flex w-fit items-center rounded-full font-bold uppercase shadow-sm ${
+          isApproved
+            ? "bg-white/25 text-white dark:bg-emerald-100/80 dark:text-emerald-950"
+            : "bg-white/70 text-amber-900 dark:bg-amber-100/80 dark:text-amber-950"
+        } ${
           compact
             ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]"
             : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
         }`}
       >
-        Approved
+        {status}
       </span>
       <span
         className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}
       >
+        {request.availability?.consultation_mode && (
+          <ConsultationModeIcon
+            mode={request.availability.consultation_mode}
+            className="size-3"
+          />
+        )}
         {format}
       </span>
       <span
@@ -1523,11 +1397,17 @@ function StudentApprovedRequestSlot({ slot }: { slot: ApprovedRequestSlot }) {
         {timeRange}
       </span>
       {roomy && (
-        <span className="mt-1 block whitespace-normal break-words text-[11px] leading-tight text-white/85 capitalize dark:text-emerald-950/80">
+        <span
+          className={`mt-1 block whitespace-normal break-words text-[11px] leading-tight capitalize ${
+            isApproved
+              ? "text-white/85 dark:text-emerald-950/80"
+              : "text-amber-900/85 dark:text-amber-950/80"
+          }`}
+        >
           {request.concern_type}
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -1676,7 +1556,11 @@ function RequestConsultationModal({
                     <span className="block text-sm font-semibold">
                       {professorName(choice.availability)}
                     </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
+                    <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <ConsultationModeIcon
+                        mode={choice.availability.consultation_mode}
+                        className="size-3.5"
+                      />
                       {consultationModeLabel(
                         choice.availability.consultation_mode,
                       )}{" "}
@@ -1922,12 +1806,10 @@ function buildStudentRequestableSlotsForDay({
 }
 function layoutStudentCalendarDay({
   availabilitySlots,
-  pendingRequests,
-  approvedRequests,
+  requests,
 }: {
   availabilitySlots: RequestableSlot[];
-  pendingRequests: ConsultationRequest[];
-  approvedRequests: ConsultationRequest[];
+  requests: ConsultationRequest[];
 }): StudentCalendarLayout {
   type CalendarEntry =
     | {
@@ -1940,16 +1822,7 @@ function layoutStudentCalendarDay({
         laneCount: number;
       }
     | {
-        type: "pending";
-        start: Date;
-        end: Date;
-        visualEnd: number;
-        request: ConsultationRequest;
-        lane: number;
-        laneCount: number;
-      }
-    | {
-        type: "approved";
+        type: "request";
         start: Date;
         end: Date;
         visualEnd: number;
@@ -1968,44 +1841,29 @@ function layoutStudentCalendarDay({
       lane: 0,
       laneCount: 1,
     })),
-    ...pendingRequests.map((request) => ({
-      type: "pending" as const,
-      start: new Date(request.requested_start_datetime),
-      end: new Date(request.requested_end_datetime),
-      visualEnd: visualEndTimeForCalendarBlock(
-        new Date(request.requested_start_datetime),
-        new Date(request.requested_end_datetime),
-        [
-          "Pending",
-          "Awaiting review",
-          `${timeLabel(new Date(request.requested_start_datetime))} - ${timeLabel(new Date(request.requested_end_datetime))}`,
+    ...requests.map((request) => {
+      const start = new Date(request.requested_start_datetime);
+      const end = new Date(request.requested_end_datetime);
+      const status = request.status === "approved" ? "Approved" : "Pending";
+      const format = request.availability?.consultation_mode
+        ? consultationModeLabel(request.availability.consultation_mode)
+        : "Consultation";
+
+      return {
+        type: "request" as const,
+        start,
+        end,
+        visualEnd: visualEndTimeForCalendarBlock(start, end, [
+          status,
+          format,
+          `${timeLabel(start)} - ${timeLabel(end)}`,
           request.concern_type,
-        ],
-      ),
-      request,
-      lane: 0,
-      laneCount: 1,
-    })),
-    ...approvedRequests.map((request) => ({
-      type: "approved" as const,
-      start: new Date(request.requested_start_datetime),
-      end: new Date(request.requested_end_datetime),
-      visualEnd: visualEndTimeForCalendarBlock(
-        new Date(request.requested_start_datetime),
-        new Date(request.requested_end_datetime),
-        [
-          "Approved",
-          request.availability?.consultation_mode
-            ? consultationModeLabel(request.availability.consultation_mode)
-            : "Confirmed",
-          `${timeLabel(new Date(request.requested_start_datetime))} - ${timeLabel(new Date(request.requested_end_datetime))}`,
-          request.concern_type,
-        ],
-      ),
-      request,
-      lane: 0,
-      laneCount: 1,
-    })),
+        ]),
+        request,
+        lane: 0,
+        laneCount: 1,
+      };
+    }),
   ].sort(
     (first, second) => first.start.getTime() - second.start.getTime(),
   ) satisfies CalendarEntry[];
@@ -2056,17 +1914,8 @@ function layoutStudentCalendarDay({
     availabilitySlots: entries
       .filter((entry) => entry.type === "availability")
       .map((entry) => entry.slot),
-    pendingSlots: entries
-      .filter((entry) => entry.type === "pending")
-      .map((entry) => ({
-        request: entry.request,
-        start: entry.start,
-        end: entry.end,
-        lane: entry.lane,
-        laneCount: entry.laneCount,
-      })),
-    approvedSlots: entries
-      .filter((entry) => entry.type === "approved")
+    requestSlots: entries
+      .filter((entry) => entry.type === "request")
       .map((entry) => ({
         request: entry.request,
         start: entry.start,
@@ -2124,6 +1973,17 @@ function consultationModeLabel(mode: Availability["consultation_mode"]) {
     : mode === "online"
       ? "Online"
       : "Online or F2F";
+}
+function ConsultationModeIcon({
+  mode,
+  className = "size-4",
+}: {
+  mode: Availability["consultation_mode"];
+  className?: string;
+}) {
+  if (mode === "online") return <Monitor className={className} />;
+  if (mode === "f2f") return <MapPin className={className} />;
+  return <SquareSplitHorizontal className={className} />;
 }
 function consultationInstructorName(request: ConsultationRequest) {
   const name = request.instructor?.full_name?.trim();
@@ -2215,39 +2075,7 @@ function formatHour(hour: number) {
   return `${value} ${suffix}`;
 }
 function weekLabel(start: Date, end: Date) {
-  return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
-}
-function handleApprovedConsultationUpdated(
-  updatedRequest: ApprovedConsultation,
-) {
-  setStudentRequests((current) =>
-    current.map((request) =>
-      request.id === updatedRequest.id
-        ? {
-            ...request,
-            ...updatedRequest,
-          }
-        : request,
-    ),
-  );
-
-  setSelectedApprovedConsultation(updatedRequest);
-}
-
-function handleApprovedConsultationCancelled(requestId: string) {
-  setStudentRequests((current) =>
-    current.map((request) =>
-      request.id === requestId
-        ? {
-            ...request,
-            status: "cancelled",
-            decision_note: "Cancelled by student.",
-          }
-        : request,
-    ),
-  );
-
-  setSelectedApprovedConsultation(null);
+  return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
 }
 function ProfileStatusPanel({ complete }: { complete: boolean }) {
   return (
@@ -2279,3 +2107,5 @@ function ProfileStatusPanel({ complete }: { complete: boolean }) {
     </section>
   );
 }
+
+
