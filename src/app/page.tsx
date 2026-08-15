@@ -3,139 +3,100 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpRight,
+  ArrowUp,
   Bell,
-  BookOpenCheck,
   CalendarPlus,
   Check,
+  CheckCircle2,
+  Clock3,
   ClipboardList,
   GraduationCap,
+  LockKeyhole,
   Menu,
   MessageCircleQuestion,
   Moon,
   ShieldCheck,
   Sun,
-  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { MicrosoftMark } from "@/components/brand/MicrosoftMark";
-import { ScrollStory } from "@/components/landing/ScrollStory";
 import { Button } from "@/components/ui/button";
 
 const faqs = [
-  {
-    question: "Who can use the scheduler?",
-    answer:
-      "Students sign in using their verified @ms.bulsu.edu.ph Microsoft account. Instructors can use their institutional Microsoft account or the instructor portal account provided for testing.",
-  },
-  {
-    question: "What can I book a consultation for?",
-    answer:
-      "Students can request time for research, grades, projects, or other academic concerns. Each request includes the purpose, preferred time, consultation format, and student profile details.",
-  },
-  {
-    question: "Can I choose Online or F2F?",
-    answer:
-      "Yes. Instructors can publish Online, F2F, or Both. Students only see available windows that match their program scope.",
-  },
-  {
-    question: "What happens after a request is approved?",
-    answer:
-      "The approved consultation appears on both dashboards. The occupied time is removed from open availability so other students cannot book the same slot.",
-  },
-  {
-    question: "Can a student cancel or reschedule?",
-    answer:
-      "Students can request changes only when the consultation is not in the past and not within the 1-day lock period. Past consultations are view-only.",
-  },
+  ["Who can use the scheduler?", "Students sign in using their verified @ms.bulsu.edu.ph Microsoft account. Instructors use their institutional account or the controlled instructor portal account used for testing."],
+  ["What details are included in a request?", "A request includes the student profile, program and section, consultation purpose, preferred time, selected instructor, and selected format."],
+  ["How does the system prevent double booking?", "When an instructor approves one request, the occupied time is removed from student availability and conflicting requests are prevented from being approved."],
+  ["Can students cancel or reschedule?", "Students can request changes only when the consultation is still upcoming and not within the one-day lock period. Past consultations are view-only."],
+];
+
+const heroMetrics = [
+  { label: "Publish windows", value: "01" },
+  { label: "Review requests", value: "02" },
+  { label: "Confirm slots", value: "03" },
 ];
 
 const roleCards = [
   {
     icon: GraduationCap,
-    label: "For students",
-    title: "Request the right conversation with clear context.",
-    points: [
-      "Browse instructor availability",
-      "Choose a preferred time inside an open window",
-      "Track pending, approved, declined, and cancelled requests",
-    ],
+    eyebrow: "Students",
+    title: "Request with complete context.",
+    copy: "Browse instructor windows, pick a valid preferred time, and send the exact concern before the meeting.",
+    points: ["Program-scoped availability", "Pending and approved calendar view", "Searchable consultation history"],
   },
   {
     icon: CalendarPlus,
-    label: "For instructors",
-    title: "Publish consultation windows without losing control of your time.",
-    points: [
-      "Set Online, F2F, or Both availability",
-      "Limit windows by program scope",
-      "Approve or decline requests with conflict protection",
-    ],
-  },
-  {
-    icon: ShieldCheck,
-    label: "For the process",
-    title: "Keep the schedule clean, visible, and accountable.",
-    points: [
-      "Avoid double-booked approved slots",
-      "Notify both sides when status changes",
-      "Keep a searchable consultation history",
-    ],
+    eyebrow: "Instructors",
+    title: "Control availability without manual coordination.",
+    copy: "Set consultation windows, review requests, approve or decline, and keep occupied slots protected.",
+    points: ["Online, F2F, or Both formats", "Conflict-aware approvals", "Upcoming schedule management"],
   },
 ];
 
 const workflowCards = [
-  {
-    step: "01",
-    title: "Instructor opens availability",
-    copy: "The instructor sets date, time range, format, and program scope. Students only see windows that apply to them.",
-  },
-  {
-    step: "02",
-    title: "Student sends a focused request",
-    copy: "The student selects an available time inside the instructor window and adds the consultation purpose.",
-  },
-  {
-    step: "03",
-    title: "Instructor reviews and decides",
-    copy: "Pending requests are separated from reviewed requests, with clear student details and approval actions.",
-  },
-  {
-    step: "04",
-    title: "Both dashboards stay updated",
-    copy: "Approved schedules, notifications, occupied slots, and history update across student and instructor views.",
-  },
+  ["01", "Availability", "Instructors define the date, time range, consultation format, and allowed program scope."],
+  ["02", "Request", "Students choose a time inside the instructor window and add a focused academic concern."],
+  ["03", "Review", "Instructors see student details, purpose, and selected time before approving or declining."],
+  ["04", "Record", "Both sides receive updates, calendar visibility, and a searchable consultation history."],
 ];
 
-const systemHighlights = [
-  {
-    icon: Bell,
-    title: "Realtime status updates",
-    copy: "Students see request results without manually refreshing, and instructors see new requests as they arrive.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Consultation history",
-    copy: "Search by date, instructor or student name, purpose, and status so records are easy to review later.",
-  },
-  {
-    icon: UsersRound,
-    title: "Role-aware dashboards",
-    copy: "Students and instructors land on dashboards built for their work instead of sharing one confusing screen.",
-  },
+const platformHighlights = [
+  [Bell, "Realtime awareness", "Requests, approvals, cancellations, and counters update across dashboards without forcing users to refresh."],
+  [ClipboardList, "Operational records", "Pending, approved, declined, cancelled, and past consultations remain traceable in history."],
+  [ShieldCheck, "Built-in safeguards", "Access rules, schedule checks, and approval limits protect records even if someone tries to bypass the interface."],
+] as const;
+
+const securityItems = [
+  "Student sign-in is restricted to the institutional domain.",
+  "Role-based access limits which records each user can read or change.",
+  "Approved consultation slots are protected from overlapping approvals.",
+  "Private system credentials stay out of public browser code.",
 ];
+
+const footerGroups = [
+  { title: "Features", links: ["Availability calendar", "Request review", "Consultation history", "Notifications"] },
+  { title: "Students", links: ["Find instructor time", "Submit concerns", "Track request status", "View approved schedules"] },
+  { title: "Instructors", links: ["Set availability", "Limit program scope", "Approve requests", "Manage consultations"] },
+  { title: "Safeguards", links: ["Role-based access", "Conflict prevention", "Verified accounts", "Protected records"] },
+];
+
+const reveal = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0 },
+};
 
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("scheduler-theme");
-    const isDark = savedTheme === "dark";
-
+    const isDark = savedTheme ? savedTheme === "dark" : true;
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
 
     const syncThemeState = window.setTimeout(() => {
@@ -145,211 +106,304 @@ export default function Home() {
     return () => window.clearTimeout(syncThemeState);
   }, []);
 
+  useEffect(() => {
+    function handleScroll() {
+      setShowScrollTop(window.scrollY > 520);
+    }
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   function toggleTheme() {
     const nextIsDark = !darkMode;
-
     setDarkMode(nextIsDark);
     document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
     window.localStorage.setItem("scheduler-theme", nextIsDark ? "dark" : "light");
   }
 
-  function closeMenu() {
-    setMenuOpen(false);
-  }
-
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen overflow-x-hidden bg-background pt-20 text-foreground">
       <Header
         darkMode={darkMode}
         menuOpen={menuOpen}
         onToggleTheme={toggleTheme}
         onOpenMenu={() => setMenuOpen(true)}
-        onCloseMenu={closeMenu}
+        onCloseMenu={() => setMenuOpen(false)}
       />
 
-      <section className="mx-auto max-w-6xl px-6 pb-24 pt-16 lg:pb-32 lg:pt-24">
+      <section className={`relative overflow-hidden ${darkMode ? "bg-[#0b1220] text-white" : "bg-[#dce3ed] text-[#17233d]"}`}>
+        <div
+          className={`absolute inset-0 ${
+            darkMode
+              ? "bg-[radial-gradient(circle_at_18%_22%,rgba(37,99,235,0.18),transparent_24rem),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(11,18,32,0.98))]"
+              : "bg-[radial-gradient(circle_at_18%_22%,rgba(37,99,235,0.10),transparent_24rem),linear-gradient(135deg,rgba(220,227,237,0.98),rgba(213,222,234,0.94))]"
+          }`}
+        />
+        <div className="relative mx-auto flex min-h-[34rem] w-full max-w-[94rem] px-5 py-20 sm:px-8 sm:py-24 lg:px-10 lg:py-28">
+
         <motion.div
-          initial={{ opacity: 1, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-          className="max-w-5xl"
+          initial="hidden"
+          animate="visible"
+          variants={reveal}
+          transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 flex max-w-5xl flex-col justify-center"
         >
-          <span className="inline-flex rounded-full border border-border bg-card/70 px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
-            BulSU academic consultation scheduler
-          </span>
-          <h1 className="mt-8 text-5xl font-medium leading-[0.98] tracking-[-0.06em] text-balance sm:text-7xl lg:text-[6.4rem]">
-            Book consultations with less back-and-forth.
+          <h1 className="max-w-4xl text-5xl font-medium leading-[1.02] tracking-[-0.055em] text-balance sm:text-7xl lg:text-[5rem]">
+            Coordinate <em className="font-serif italic tracking-[-0.02em]">academic</em>
+            <br />
+            consultations with
+            <br />
+            <em className="font-serif italic tracking-[-0.02em] text-[#2563eb]">absolute clarity.</em>
           </h1>
-          <p className="mt-8 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A focused scheduling system for students and instructors: publish availability, request the right time, approve consultations, and keep academic work moving from one organized dashboard.
+
+          <p className={`mt-7 max-w-xl text-sm leading-7 sm:text-base ${darkMode ? "text-white/60" : "text-[#50617b]"}`}>
+            A structured scheduler for BulSU students and instructors. Publish availability, submit focused requests, approve schedules, and keep every consultation traceable from request to completion.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-5">
+
+          <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link
               href="/auth/microsoft"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              className={`inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition hover:-translate-y-0.5 ${darkMode ? "bg-[#3b82f6] text-white shadow-blue-950/30 hover:bg-[#2563eb]" : "bg-[#2563eb] text-white shadow-blue-300/35 hover:bg-[#1d4ed8]"}`}
             >
               <MicrosoftMark />
               Sign in with Microsoft
             </Link>
             <a
               href="#workflow"
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-foreground"
+              className={`inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white" : "border-[#b8c5d8] bg-white/25 text-[#263650] hover:bg-white/45"}`}
             >
-              See the workflow <ArrowUpRight className="size-4" />
+              View workflow <ArrowUpRight className="size-4" />
             </a>
           </div>
+
+          <div className={`mt-10 border-t pt-5 ${darkMode ? "border-white/10" : "border-[#b8c5d8]"}`}>
+            <div className={`flex flex-wrap items-center gap-x-7 gap-y-4 text-xs ${darkMode ? "text-white/55" : "text-[#66758e]"}`}>
+              <span className={`font-medium ${darkMode ? "text-white/75" : "text-[#263650]"}`}>Structured for academic consultations</span>
+              {heroMetrics.map((metric) => (
+                <span key={metric.label} className="inline-flex items-center gap-2">
+                  <span className="text-[#3b82f6]">{metric.value}</span>
+                  {metric.label}
+                </span>
+              ))}
+            </div>
+          </div>
         </motion.div>
-      </section>
 
-      <section id="about" className="border-t border-border">
-        <div className="mx-auto max-w-6xl px-6 py-20 lg:py-28">
-          <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr]">
-            <div>
-              <div className="flex items-center gap-4">
-                <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-sm backdrop-blur">
-                  <BookOpenCheck className="size-7 text-primary" aria-hidden="true" />
-                </div>
-                <p className="max-w-[13rem] text-sm font-medium leading-6 text-muted-foreground">
-                  Built for academic consultation, not generic calendar booking
-                </p>
-              </div>
-            </div>
-            <div>
-              <h2 className="max-w-3xl text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">
-                The system keeps the important details visible before the meeting starts.
-              </h2>
-              <p className="mt-7 max-w-2xl text-base leading-7 text-muted-foreground">
-                Students do not only pick a date. They submit the concern, program details, preferred time, and consultation format. Instructors do not only receive a notification. They review the request, approve or decline it, and keep the schedule protected from overlapping approvals.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-14 grid gap-4 md:grid-cols-3">
-            {roleCards.map((card) => (
-              <RoleCard key={card.label} {...card} />
-            ))}
-          </div>
         </div>
       </section>
 
-      <section id="workflow" className="border-t border-border">
-        <div className="mx-auto max-w-6xl px-6 py-20 lg:py-28">
-          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+      <MotionSection id="about" className="relative mx-auto w-full max-w-[94rem] px-5 py-16 sm:px-8 lg:px-10 lg:py-24">
+        <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2563eb]">Why it exists</p>
+            <h2 className="mt-5 text-4xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">
+              Consultation scheduling should not depend on scattered messages.
+            </h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {roleCards.map((card, index) => (
+              <RolePanel key={card.eyebrow} index={index} {...card} />
+            ))}
+          </div>
+        </div>
+      </MotionSection>
+
+      <MotionSection id="workflow" className="relative bg-[#2563eb]/[0.025] py-16 lg:py-24">
+        <div className="mx-auto w-full max-w-[94rem] px-5 sm:px-8 lg:px-10">
+        <div className="rounded-[2rem] border border-border bg-card p-6 lg:p-10">
+          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Practical workflow</p>
-              <h2 className="mt-4 max-w-2xl text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">
-                From availability to approved consultation.
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2563eb]">Workflow</p>
+              <h2 className="mt-4 max-w-3xl text-4xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">
+                A clean path from open schedule to approved consultation.
               </h2>
             </div>
-            <Link href="/auth/microsoft" className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-5 py-3 text-sm font-medium transition hover:bg-muted">
-              Start scheduling <ArrowUpRight className="size-4" />
+            <Link
+              href="/auth/microsoft"
+              className="inline-flex w-fit items-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
+            >
+              Start now <ArrowUpRight className="size-4" />
             </Link>
           </div>
 
-          <div className="mt-12 grid gap-4 lg:grid-cols-4">
-            {workflowCards.map((item) => (
-              <div key={item.step} className="rounded-3xl border border-border bg-card/75 p-6 shadow-sm backdrop-blur">
-                <p className="text-sm font-semibold text-primary">{item.step}</p>
-                <h3 className="mt-5 text-lg font-semibold tracking-tight">{item.title}</h3>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">{item.copy}</p>
+          <motion.div
+            variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.25 }}
+            className="relative mt-10 grid gap-4 lg:grid-cols-4"
+          >
+            <motion.div
+              aria-hidden="true"
+              initial={{ scaleX: 0 }}
+              whileInView={{ scaleX: 1 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute left-6 right-6 top-10 hidden h-px origin-left bg-gradient-to-r from-[#2563eb]/0 via-[#2563eb]/45 to-[#2563eb]/0 lg:block"
+            />
+            {workflowCards.map(([step, title, copy], index) => (
+              <ProcessCard key={step} step={step} title={title} copy={copy} index={index} />
+            ))}
+          </motion.div>
+        </div>
+        </div>
+      </MotionSection>
+
+      <MotionSection className="mx-auto grid w-full max-w-[94rem] gap-6 px-5 py-16 sm:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-24">
+        <div className="rounded-[2rem] border border-border bg-card p-6 lg:p-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2563eb]">Core functions</p>
+          <h2 className="mt-4 max-w-2xl text-4xl font-medium leading-tight tracking-[-0.04em]">
+            Built around the operational needs of consultation work.
+          </h2>
+          <div className="mt-8 grid gap-4">
+            {platformHighlights.map(([Icon, title, copy], index) => (
+              <InfoRow key={title} icon={<Icon className="size-5" />} title={title} copy={copy} index={index} />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-6">
+          <motion.div whileHover={{ y: -3 }} className="rounded-[2rem] border border-border bg-card p-6 transition">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">Calendar logic</p>
+              <Clock3 className="size-5 text-[#2563eb]" />
+            </div>
+            <div className="mt-6 space-y-3">
+              <PreviewRow label="Available window" value="9:00 AM - 1:00 PM" />
+              <PreviewRow label="Student selected" value="10:00 AM - 10:30 AM" />
+              <PreviewRow label="Remaining slot" value="9:00 AM - 10:00 AM / 10:30 AM - 1:00 PM" />
+            </div>
+          </motion.div>
+
+          <motion.div whileHover={{ y: -3 }} className="rounded-[2rem] border border-[#2563eb]/25 bg-[#2563eb]/10 p-6 transition">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">Result</p>
+            <h3 className="mt-4 text-3xl font-medium tracking-[-0.035em]">
+              Students see what remains. Instructors keep the record.
+            </h3>
+          </motion.div>
+        </div>
+      </MotionSection>
+
+      <MotionSection id="security" className={`border-y border-[#2563eb]/15 ${darkMode ? "bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,58,138,0.9))] text-white" : "bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(191,219,254,0.72))] text-[#17233d]"}`}>
+        <div className="mx-auto grid w-full max-w-[94rem] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:px-10 lg:py-24">
+          <div>
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-[#2563eb] text-white">
+              <LockKeyhole className="size-7" />
+            </div>
+            <h2 className="mt-6 text-4xl font-medium leading-tight tracking-[-0.04em]">
+              Safety is handled in the database, not only in the interface.
+            </h2>
+            <p className={`mt-5 leading-7 ${darkMode ? "text-white/65" : "text-[#50617b]"}`}>
+              The interface guides users, but record access, role permissions, and scheduling conflict checks provide the final protection layer.
+            </p>
+          </div>
+
+          <div className="grid gap-3">
+            {securityItems.map((item, index) => (
+              <motion.div
+                key={item}
+                initial={{ opacity: 0, x: 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ delay: index * 0.07, duration: 0.38 }}
+                className={`flex items-start gap-4 rounded-2xl border p-5 ${darkMode ? "border-white/10 bg-white/[0.06]" : "border-[#93c5fd]/45 bg-white/45"}`}
+              >
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-[#2563eb]" />
+                <p className={`text-sm leading-6 ${darkMode ? "text-white/70" : "text-[#334155]"}`}>{item}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </MotionSection>
+
+      <MotionSection id="faq" className="bg-[linear-gradient(180deg,rgba(37,99,235,0.04),transparent)]">
+        <div className="mx-auto w-full max-w-[94rem] px-5 py-16 sm:px-8 lg:px-10 lg:py-24">
+        <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2563eb]">Questions</p>
+            <h2 className="mt-4 text-4xl font-medium leading-tight tracking-[-0.04em]">
+              What users should know before they book.
+            </h2>
+            <div className="mt-8 rounded-3xl border border-border bg-card p-5">
+              <MessageCircleQuestion className="size-6 text-[#2563eb]" />
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                Clear rules make the scheduler easier to trust for both students and instructors.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[2rem] border border-border bg-card">
+            {faqs.map(([question, answer], index) => (
+              <div key={question} className="border-b border-border last:border-b-0">
+                <button
+                  className="flex w-full items-center justify-between gap-6 px-6 py-6 text-left text-lg font-semibold transition hover:bg-muted/45"
+                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                >
+                  {question}
+                  <motion.span animate={{ rotate: openFaq === index ? 180 : 0 }} className="text-2xl font-light text-[#2563eb]">
+                    {openFaq === index ? "-" : "+"}
+                  </motion.span>
+                </button>
+                <AnimatePresence initial={false}>
+                  {openFaq === index && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <p className="max-w-2xl px-6 pb-6 text-sm leading-6 text-muted-foreground">{answer}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ))}
           </div>
         </div>
-      </section>
+        </div>
+      </MotionSection>
 
-      <ScrollStory />
-
-      <section className="mx-auto max-w-6xl px-6 py-20 lg:py-28">
-        <div className="rounded-[2rem] border border-border bg-card/80 p-7 shadow-sm backdrop-blur sm:p-10 lg:p-14">
-          <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
+      <footer className="border-t border-border bg-card">
+        <div className="mx-auto w-full max-w-[94rem] px-5 py-14 sm:px-8 lg:px-10">
+          <div className="grid gap-10 lg:grid-cols-[1.25fr_2fr]">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">What makes it useful</p>
-              <h2 className="mt-6 max-w-2xl text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">
-                Designed around the actual consultation process.
-              </h2>
-              <p className="mt-6 max-w-xl text-sm leading-7 text-muted-foreground">
-                The landing page now explains the system clearly for first-time users: what each role can do, how booking works, what happens after approval, and how schedule conflicts are handled.
+              <div className="text-base font-semibold"><BrandLogo /></div>
+              <p className="mt-5 max-w-sm text-sm leading-6 text-muted-foreground">
+                Student Consultation Scheduler organizes availability, requests, approvals, and records for academic consultation workflows.
               </p>
             </div>
-            <div className="grid gap-4">
-              {systemHighlights.map((item) => (
-                <InfoCard key={item.title} {...item} />
-              ))}
+
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+              {footerGroups.map((group) => <FooterGroup key={group.title} {...group} />)}
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="border-y border-border">
-        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-16 md:grid-cols-3">
-          <Feature text="Student accounts are restricted to the required institutional email domain." />
-          <Feature text="Approved time slots are protected from duplicate bookings." />
-          <Feature text="Upcoming, pending, cancelled, and past consultations stay visible in history." />
-        </div>
-      </section>
-
-      <section id="faq" className="border-t border-border">
-        <div className="mx-auto max-w-6xl px-6 py-20 lg:py-28">
-          <div className="grid gap-10 lg:grid-cols-[0.65fr_1.35fr]">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Questions, answered</p>
-              <div className="mt-8 rounded-3xl border border-border bg-card p-5 shadow-sm">
-                <MessageCircleQuestion className="size-6 text-primary" />
-                <p className="mt-5 text-lg font-medium tracking-tight">
-                  What users should know before they book.
-                </p>
-                <div className="mt-6 space-y-3">
-                  <div className="h-2 w-4/5 rounded-full bg-muted" />
-                  <div className="h-2 w-3/5 rounded-full bg-muted" />
-                  <div className="h-2 w-2/5 rounded-full bg-primary/30" />
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-border">
-              {faqs.map((faq, index) => (
-                <div key={faq.question} className="border-b border-border">
-                  <button
-                    className="flex w-full items-center justify-between gap-6 py-6 text-left text-lg font-medium"
-                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  >
-                    {faq.question}
-                    <span className="text-2xl font-light text-muted-foreground">
-                      {openFaq === index ? "-" : "+"}
-                    </span>
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {openFaq === index && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <p className="max-w-xl pb-6 text-sm leading-6 text-muted-foreground">
-                          {faq.answer}
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold">
-            <BrandLogo />
-          </div>
-          <div className="space-y-1 text-sm text-muted-foreground sm:text-right">
-            <p>For verified @ms.bulsu.edu.ph student accounts and instructor-managed consultation schedules.</p>
-            <p>© 2026 Student Consultation Scheduler. All rights reserved.</p>
+          <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <p>{"\u00A9"} 2026 Student Consultation Scheduler. All rights reserved.</p>
+            <p>For verified @ms.bulsu.edu.ph student accounts and instructor-managed schedules.</p>
           </div>
         </div>
       </footer>
+
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            type="button"
+            aria-label="Back to top"
+            initial={{ opacity: 0, y: 18, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.94 }}
+            transition={{ duration: 0.22 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-6 z-50 inline-flex size-12 items-center justify-center rounded-full border border-[#60a5fa]/35 bg-[#2563eb] text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-[#1d4ed8]"
+          >
+            <ArrowUp className="size-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
@@ -368,58 +422,50 @@ function Header({
   onCloseMenu: () => void;
 }) {
   return (
-    <header className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6 lg:h-24">
-      <Link href="/" className="text-base font-semibold tracking-tight">
-        <BrandLogo />
-      </Link>
-      <nav className="hidden items-center gap-9 text-sm text-muted-foreground md:flex">
-        <a href="#about" className="transition hover:text-foreground">About</a>
-        <a href="#workflow" className="transition hover:text-foreground">Workflow</a>
-        <a href="#approach" className="transition hover:text-foreground">Approach</a>
-        <a href="#faq" className="transition hover:text-foreground">FAQ</a>
-        <Link href="/auth/microsoft" className="inline-flex items-center gap-2 transition hover:text-foreground">
-          <MicrosoftMark />Sign in
-        </Link>
-      </nav>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          className="theme-toggle"
-          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-          onClick={onToggleTheme}
+    <header
+      className={`fixed inset-x-0 top-0 z-40 border-b backdrop-blur-md ${
+        darkMode
+          ? "border-white/10 bg-[#050607]/90 text-white"
+          : "border-[#cbd5e1]/70 bg-[#eef2f7]/90 text-[#17233d]"
+      }`}
+    >
+      <div className="mx-auto flex h-20 w-full max-w-[94rem] items-center justify-between px-5 sm:px-8 lg:px-10">
+        <Link href="/" className="text-base font-semibold tracking-tight"><BrandLogo /></Link>
+        <nav
+          className={`hidden items-center gap-8 text-sm font-medium md:flex ${
+            darkMode ? "text-white/60" : "text-[#52647e]"
+          }`}
         >
-          {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          <span>{darkMode ? "Light" : "Dark"}</span>
-        </Button>
-        <Link href="/auth/microsoft" className="hidden items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 md:inline-flex">
-          <MicrosoftMark />Sign in
-        </Link>
-        <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu" onClick={onOpenMenu}>
-          <Menu className="size-5" />
-        </Button>
+          <a href="#about" className={`transition ${darkMode ? "hover:text-white" : "hover:text-[#17233d]"}`}>About</a>
+          <a href="#workflow" className={`transition ${darkMode ? "hover:text-white" : "hover:text-[#17233d]"}`}>Workflow</a>
+          <a href="#security" className={`transition ${darkMode ? "hover:text-white" : "hover:text-[#17233d]"}`}>Security</a>
+          <a href="#faq" className={`transition ${darkMode ? "hover:text-white" : "hover:text-[#17233d]"}`}>FAQ</a>
+        </nav>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" className="theme-toggle landing-theme-toggle" aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
+            {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            <span>{darkMode ? "Light" : "Dark"}</span>
+          </Button>
+          <Link href="/auth/microsoft" className="hidden items-center gap-2 rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#1d4ed8] md:inline-flex">
+            <MicrosoftMark />Sign in
+          </Link>
+          <Button variant="ghost" size="icon" className={darkMode ? "text-white md:hidden" : "text-[#17233d] md:hidden"} aria-label="Open menu" onClick={onOpenMenu}><Menu className="size-5" /></Button>
+        </div>
       </div>
+
       <AnimatePresence>
         {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            className="fixed inset-x-4 top-4 z-50 rounded-2xl border border-border bg-card p-5 shadow-2xl md:hidden"
-          >
+          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="fixed inset-x-4 top-4 z-50 rounded-2xl border border-border bg-card p-5 text-foreground shadow-2xl md:hidden">
             <div className="flex items-center justify-between">
               <span className="font-semibold">Menu</span>
-              <Button variant="ghost" size="icon" aria-label="Close menu" onClick={onCloseMenu}>
-                <X className="size-5" />
-              </Button>
+              <Button variant="ghost" size="icon" aria-label="Close menu" onClick={onCloseMenu}><X className="size-5" /></Button>
             </div>
             <nav className="mt-6 grid gap-4 text-lg">
               <a href="#about" onClick={onCloseMenu}>About</a>
               <a href="#workflow" onClick={onCloseMenu}>Workflow</a>
-              <a href="#approach" onClick={onCloseMenu}>Approach</a>
+              <a href="#security" onClick={onCloseMenu}>Security</a>
               <a href="#faq" onClick={onCloseMenu}>FAQ</a>
-              <Link className="inline-flex items-center gap-2" href="/auth/microsoft">
-                <MicrosoftMark />Sign in
-              </Link>
+              <Link className="inline-flex items-center gap-2" href="/auth/microsoft"><MicrosoftMark />Sign in</Link>
             </nav>
           </motion.div>
         )}
@@ -428,50 +474,91 @@ function Header({
   );
 }
 
-function RoleCard({
-  icon: Icon,
-  label,
-  title,
-  points,
-}: {
-  icon: typeof GraduationCap;
-  label: string;
-  title: string;
-  points: string[];
-}) {
+function MotionSection({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <div className="rounded-[1.75rem] border border-border bg-card/75 p-6 shadow-sm backdrop-blur">
-      <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+    <motion.section id={id} initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.16 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} className={className}>
+      {children}
+    </motion.section>
+  );
+}
+
+function RolePanel({ icon: Icon, eyebrow, title, copy, points, index }: { icon: typeof GraduationCap; eyebrow: string; title: string; copy: string; points: string[]; index: number }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ delay: index * 0.08, duration: 0.42 }} whileHover={{ y: -3 }} className="rounded-[1.75rem] border border-border bg-card p-6 transition">
+      <div className="flex size-12 items-center justify-center rounded-2xl bg-[#2563eb]/10 text-[#2563eb]">
         <Icon className="size-6" />
       </div>
-      <p className="mt-6 text-sm font-medium text-muted-foreground">{label}</p>
-      <h3 className="mt-3 text-xl font-semibold tracking-tight">{title}</h3>
+      <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">{eyebrow}</p>
+      <h3 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{title}</h3>
+      <p className="mt-4 text-sm leading-6 text-muted-foreground">{copy}</p>
       <div className="mt-6 space-y-3">
-        {points.map((point) => (
-          <Feature key={point} text={point} />
-        ))}
+        {points.map((point) => <Feature key={point} text={point} />)}
       </div>
+    </motion.div>
+  );
+}
+
+function ProcessCard({ step, title, copy, index }: { step: string; title: string; copy: string; index: number }) {
+  return (
+    <motion.div
+      variants={reveal}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.18 }}
+      className="group relative overflow-hidden rounded-3xl border border-border bg-background p-5 transition"
+    >
+      <motion.div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-1 bg-[#2563eb]"
+        initial={{ scaleX: 0 }}
+        whileInView={{ scaleX: 1 }}
+        viewport={{ once: true, amount: 0.45 }}
+        transition={{ delay: 0.18 + index * 0.09, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+        style={{ transformOrigin: "left" }}
+      />
+      <div className="relative z-10 flex items-center justify-between">
+        <span className="flex size-11 items-center justify-center rounded-2xl bg-[#2563eb] text-sm font-semibold text-white">
+          {step}
+        </span>
+        <span
+          aria-hidden="true"
+          className="text-[#2563eb] opacity-0 transition group-hover:opacity-100"
+        >
+          <ArrowUpRight className="size-5" />
+        </span>
+      </div>
+      <h3 className="relative z-10 mt-6 text-xl font-semibold tracking-[-0.03em]">{title}</h3>
+      <p className="relative z-10 mt-4 text-sm leading-6 text-muted-foreground">{copy}</p>
+    </motion.div>
+  );
+}
+
+function InfoRow({ icon, title, copy, index }: { icon: ReactNode; title: string; copy: string; index: number }) {
+  return (
+    <motion.div initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ delay: index * 0.08, duration: 0.38 }} whileHover={{ x: 3 }} className="flex gap-4 rounded-3xl border border-border bg-background/60 p-5">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb]/10 text-[#2563eb]">{icon}</div>
+      <div>
+        <h3 className="font-semibold tracking-tight">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function PreviewRow({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-5 rounded-2xl border border-border bg-card/80 ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-semibold">{value}</span>
     </div>
   );
 }
 
-function InfoCard({
-  icon: Icon,
-  title,
-  copy,
-}: {
-  icon: typeof Bell;
-  title: string;
-  copy: string;
-}) {
+function FooterGroup({ title, links }: { title: string; links: string[] }) {
   return (
-    <div className="flex gap-4 rounded-3xl border border-border bg-background/50 p-5">
-      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-        <Icon className="size-5" />
-      </div>
-      <div>
-        <h3 className="font-semibold tracking-tight">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">{title}</h3>
+      <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+        {links.map((link) => <span key={link}>{link}</span>)}
       </div>
     </div>
   );
@@ -480,7 +567,7 @@ function InfoCard({
 function Feature({ text }: { text: string }) {
   return (
     <p className="flex gap-3 text-sm leading-6 text-muted-foreground">
-      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+      <Check className="mt-0.5 size-4 shrink-0 text-[#2563eb]" />
       {text}
     </p>
   );

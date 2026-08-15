@@ -6,7 +6,11 @@ export default async function StudentDashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("role, full_name, program, section, phone_number").eq("id", user.id).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, program, section, phone_number, department, job_title, office_location")
+    .eq("id", user.id)
+    .single();
   const role = profile?.role ?? (user.email?.match(/^[0-9]+@/) ? "student" : "instructor");
   if (role !== "student") redirect("/dashboard/instructor");
   const emailUsername = user.email?.split("@")[0] ?? "Student";
@@ -38,7 +42,7 @@ export default async function StudentDashboardPage() {
 
   const { data: requestData } = await supabase
     .from("consultation_requests")
-    .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
+    .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
     .eq("student_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -53,6 +57,8 @@ export default async function StudentDashboardPage() {
     status: "pending" | "approved" | "declined" | "cancelled";
     decision_note: string | null;
     created_at: string;
+    microsoft_calendar_event_id: string | null;
+    microsoft_calendar_synced_at: string | null;
     instructor?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
     availability?: { consultation_mode: "f2f" | "online" | "both" }[] | { consultation_mode: "f2f" | "online" | "both" } | null;
   }>;
@@ -85,7 +91,20 @@ export default async function StudentDashboardPage() {
       key={workspaceVersion}
       displayName={displayName}
       email={user.email ?? ""}
-      profile={profile ? { program: profile.program, section: profile.section, phone_number: profile.phone_number } : null}
+      profile={
+        profile
+          ? {
+              role,
+              full_name: profile.full_name,
+              program: profile.program,
+              section: profile.section,
+              phone_number: profile.phone_number,
+              department: profile.department,
+              job_title: profile.job_title,
+              office_location: profile.office_location,
+            }
+          : null
+      }
       availability={availability}
       requests={requests}
       occupiedSlots={occupiedSlots}

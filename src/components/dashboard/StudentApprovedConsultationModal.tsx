@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarCheck2,
   CalendarDays,
   Clock,
   Edit3,
@@ -15,6 +16,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { downloadConsultationInvite } from "@/lib/calendar/ics";
 
 type ConsultationMode = "f2f" | "online" | "both";
 type ConcernType = "research" | "grades" | "projects" | "others";
@@ -35,6 +37,8 @@ export type ApprovedConsultation = {
   status: ConsultationStatus;
   decision_note: string | null;
   created_at: string;
+  microsoft_calendar_event_id: string | null;
+  microsoft_calendar_synced_at: string | null;
   instructor?: {
     full_name: string | null;
     email: string | null;
@@ -76,6 +80,8 @@ const consultationRequestSelect = `
   status,
   decision_note,
   created_at,
+  microsoft_calendar_event_id,
+  microsoft_calendar_synced_at,
   instructor:profiles!consultation_requests_instructor_id_fkey(
     full_name,
     email
@@ -345,20 +351,43 @@ export function StudentApprovedConsultationModal({
     onClose();
   }
 
+  function downloadCalendarInvite() {
+    if (!isApproved || isPastApproved) {
+      onToast(
+        "Only upcoming approved consultations can be added to a calendar.",
+        "error",
+      );
+      return;
+    }
+
+    downloadConsultationInvite({
+      id: request.id,
+      title: `${concernLabel(request.concern_type)} consultation`,
+      instructorName,
+      mode: modeLabel(request.availability?.consultation_mode),
+      concern: concernLabel(request.concern_type),
+      message: request.message,
+      start: request.requested_start_datetime,
+      end: request.requested_end_datetime,
+    });
+
+    onToast("Calendar invite downloaded.", "success");
+  }
+
   const instructorName =
     request.instructor?.full_name?.trim() ||
     request.instructor?.email?.split("@")[0] ||
     "Instructor";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3 backdrop-blur-[2px]">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="consultation-details-title"
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-7">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Consultation request
@@ -385,18 +414,18 @@ export function StudentApprovedConsultationModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex size-10 items-center justify-center rounded-full border border-border transition hover:bg-muted"
+            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Close"
           >
-            <X className="size-5" />
+            <X className="size-4" />
           </button>
         </div>
 
-        <div className="space-y-5 p-5 sm:p-7">
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+          <div className="rounded-2xl border border-[#2563eb]/15 bg-[#2563eb]/5 p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                <CalendarDays className="size-6" />
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
+                <CalendarDays className="size-5" />
               </div>
 
               <div>
@@ -404,7 +433,7 @@ export function StudentApprovedConsultationModal({
                   Scheduled for
                 </p>
 
-                <p className="mt-1 text-lg font-semibold">
+                <p className="mt-1 text-base font-semibold">
                   {formatDate(request.requested_start_datetime)}
                 </p>
 
@@ -418,7 +447,7 @@ export function StudentApprovedConsultationModal({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <DetailItem
               icon={UserRound}
               label="Instructor"
@@ -445,7 +474,7 @@ export function StudentApprovedConsultationModal({
           </div>
 
           {editing ? (
-            <div className="space-y-4 rounded-2xl border border-border bg-background p-5">
+            <div className="space-y-4 rounded-2xl border border-border bg-background/70 p-4">
               <div>
                 <label className="text-sm font-medium">
                   Concern type
@@ -513,14 +542,14 @@ export function StudentApprovedConsultationModal({
                 Your concern
               </p>
 
-              <div className="mt-2 rounded-2xl border border-border bg-muted/30 p-5 text-sm leading-7">
+              <div className="mt-2 rounded-2xl border border-border bg-muted/25 p-4 text-sm leading-6">
                 {request.message}
               </div>
             </div>
           )}
 
           {request.decision_note && (
-            <div className="rounded-2xl border border-border bg-muted/30 p-5">
+            <div className="rounded-2xl border border-border bg-muted/25 p-4">
               <p className="text-sm font-medium">
                 Instructor note
               </p>
@@ -612,6 +641,38 @@ export function StudentApprovedConsultationModal({
 
           {isApproved && (
             <>
+              {!isPastApproved && (
+              <div className="rounded-2xl border border-[#2563eb]/20 bg-[#2563eb]/8 p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
+                        <CalendarCheck2 className="size-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Calendar invite
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          Download an .ics invite and open it with Outlook,
+                          Microsoft Calendar, Google Calendar, or Apple Calendar.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={downloadCalendarInvite}
+                      className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
+                    >
+                      <span className="flex size-6 items-center justify-center rounded-full bg-white/15 text-white transition group-hover:scale-105">
+                        <CalendarCheck2 className="size-4" />
+                      </span>
+                      Download invite
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isPastApproved && (
                 <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
                   <strong>This consultation is completed.</strong>{" "}
@@ -705,13 +766,13 @@ function DetailItem({
   value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/60 p-4">
+    <div className="rounded-xl border border-border bg-background/45 p-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-4" />
         {label}
       </div>
 
-      <p className="mt-2 text-sm font-medium">
+      <p className="mt-1.5 break-words text-sm font-medium">
         {value}
       </p>
     </div>

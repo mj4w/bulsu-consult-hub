@@ -1,21 +1,18 @@
 import Link from "next/link";
 import {
+  CalendarRange,
   ClipboardList,
   UserRound,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { LogoutButton } from "@/components/auth/LogoutButton";
 import { SessionTimeout } from "@/components/auth/SessionTimeout";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { InstructorDashboardShell } from "@/components/dashboard/InstructorDashboardShell";
 import {
   InstructorAvailabilityManager,
   type OccupiedConsultation,
 } from "@/components/dashboard/InstructorAvailabilityManager";
 import { InstructorSummaryCards } from "@/components/dashboard/InstructorSummaryCards";
-import { NotificationBell } from "@/components/dashboard/NotificationBell";
-import { PendingRequestsBadge } from "@/components/dashboard/PendingRequestsBadge";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { ClientSafeBoundary } from "@/components/ui/ClientSafeBoundary";
 import { createClient } from "@/lib/supabase/server";
 
@@ -87,142 +84,128 @@ export default async function InstructorDashboardPage() {
   const approvedRequests = requests.filter((request) => request.status === "approved");
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <>
       <SessionTimeout />
-      <header className="border-t-4 border-primary border-b border-border bg-card">
-        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-5 sm:gap-5 sm:px-8 lg:px-12">
-          <Link
-            href="/dashboard/instructor"
-            className="font-semibold tracking-tight"
-            aria-label="Refresh instructor dashboard"
-          >
-            <BrandLogo />
-          </Link>
-          <div className="flex items-center gap-2">
-            <nav className="mr-3 hidden items-center gap-7 text-sm text-muted-foreground lg:flex">
-              <a href="#dashboard" className="font-medium text-primary">
-                Dashboard
-              </a>
-              <Link href="/dashboard/instructor/requests" className="inline-flex items-center hover:text-foreground">
-                Requests
-                <ClientSafeBoundary>
-                  <PendingRequestsBadge />
-                </ClientSafeBoundary>
-              </Link>
-              <Link href="/onboarding" className="hover:text-foreground">
-                My profile
-              </Link>
-            </nav>
+      <InstructorDashboardShell
+        displayName={displayName}
+        email={user.email ?? ""}
+        dashboardContent={
+          <>
             <ClientSafeBoundary>
-              <NotificationBell role="instructor" />
+              <InstructorSummaryCards
+                initialAvailability={availability}
+                initialRequests={requests}
+              />
             </ClientSafeBoundary>
-            <ClientSafeBoundary>
-              <ThemeToggle />
-            </ClientSafeBoundary>
-            <ClientSafeBoundary>
-              <LogoutButton />
-            </ClientSafeBoundary>
-          </div>
-        </div>
-        <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
-          <Link href="/dashboard/instructor" className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground">
-            Dashboard
-          </Link>
-          <Link href="/dashboard/instructor/requests" className="inline-flex shrink-0 items-center rounded-full border border-border px-4 py-2">
-            Requests
-            <ClientSafeBoundary>
-              <PendingRequestsBadge />
-            </ClientSafeBoundary>
-          </Link>
-          <Link href="/onboarding" className="shrink-0 rounded-full border border-border px-4 py-2">
-            My profile
-          </Link>
-        </nav>
-      </header>
 
-      <div id="dashboard" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
-        <div className="border-b border-border pb-8">
-          <p className="text-sm font-medium text-muted-foreground">
-            Instructor dashboard
-          </p>
-          <h1 className="mt-2 text-3xl font-medium tracking-tight sm:text-4xl">
-            Welcome, {displayName}.
-          </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Open consultation windows, review student requests, and confirm the meetings that fit your time.
-          </p>
-        </div>
-
-        <ClientSafeBoundary>
-          <InstructorSummaryCards initialAvailability={availability} initialRequests={requests} />
-        </ClientSafeBoundary>
-
-        <section id="availability" className="mt-8">
-          <ClientSafeBoundary
-            fallback={
-              <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-                The calendar widget could not load. Refresh the page or sign in again.
-              </div>
-            }
-          >
-            <InstructorAvailabilityManager
-              initialAvailability={availability}
-              initialOccupiedConsultations={approvedRequests}
-            />
-          </ClientSafeBoundary>
-        </section>
-
-        <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-primary">
-                <ClipboardList className="size-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Consultation requests
+            <section className="mt-6 grid gap-6 lg:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                    <ClipboardList className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Consultation requests
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                      Review student requests
+                    </h2>
+                  </div>
+                </div>
+                <p className="mt-5 text-sm leading-6 text-muted-foreground">
+                  Approve or decline student requests in a separate workspace.
+                  This keeps the calendar focused on availability and confirmed
+                  meetings.
                 </p>
-                <h2 className="mt-1 text-xl font-medium tracking-tight">
-                  Review student requests
-                </h2>
+                <Link
+                  href="/dashboard/instructor/requests"
+                  className="mt-5 inline-flex text-sm font-medium text-[#2563eb] hover:underline"
+                >
+                  Open requests
+                </Link>
               </div>
-            </div>
-            <p className="mt-5 text-sm leading-6 text-muted-foreground">
-              Keep request approval in a separate workspace so the calendar stays focused on availability and confirmed meetings.
-            </p>
-            <Link
-              href="/dashboard/instructor/requests"
-              className="mt-5 inline-flex text-sm font-medium text-primary hover:underline"
-            >
-              Open requests
-            </Link>
-          </div>
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-primary">
-                <UserRound className="size-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Instructor profile
+
+              <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                    <CalendarRange className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Availability planning
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                      Publish only the windows you can handle
+                    </h2>
+                  </div>
+                </div>
+                <p className="mt-5 text-sm leading-6 text-muted-foreground">
+                  Set consultation windows by date, time, format, and program
+                  scope. Approved bookings reduce availability for students.
                 </p>
-                <h2 className="mt-1 text-xl font-medium tracking-tight">
-                  Keep it current
-                </h2>
               </div>
-            </div>
-            <p className="mt-5 text-sm leading-6 text-muted-foreground">
-              Your profile helps students identify the right instructor before sending a consultation request.
-            </p>
-            <Link
-              href="/onboarding"
-              className="mt-5 inline-flex text-sm font-medium text-primary hover:underline"
+            </section>
+          </>
+        }
+        calendarContent={
+          <section className="mt-5">
+            <ClientSafeBoundary
+              fallback={
+                <div className="rounded-[1.5rem] border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
+                  The calendar widget could not load. Refresh the page or sign
+                  in again.
+                </div>
+              }
             >
-              Edit profile
-            </Link>
-          </div>
-        </section>
-      </div>
-    </main>
+              <InstructorAvailabilityManager
+                initialAvailability={availability}
+                initialOccupiedConsultations={approvedRequests}
+              />
+            </ClientSafeBoundary>
+          </section>
+        }
+        profileContent={
+          <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+            <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+              <p className="text-sm font-semibold text-[#2563eb]">
+                Instructor identity
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+                Make it easy for students to recognize you.
+              </h2>
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                Your profile name appears on student calendars, request
+                details, and approved consultation records.
+              </p>
+            </div>
+            <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#2563eb]/10 text-[#2563eb]">
+                  <UserRound className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Signed in as
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                    {displayName}
+                  </h2>
+                </div>
+              </div>
+              <p className="mt-4 break-all text-sm text-muted-foreground">
+                {user.email}
+              </p>
+              <Link
+                href="/onboarding"
+                className="mt-6 inline-flex items-center rounded-xl bg-foreground px-4 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:opacity-90"
+              >
+                Edit profile
+              </Link>
+            </div>
+          </section>
+        }
+      />
+    </>
   );
 }

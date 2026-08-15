@@ -391,7 +391,7 @@ export function InstructorAvailabilityManager({
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-4 sm:p-8">
+    <section className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm sm:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -408,7 +408,7 @@ export function InstructorAvailabilityManager({
         </div>
         <button
           onClick={() => openNewWindow("", "")}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
         >
           <Plus className="size-4" /> Add consultation window
         </button>
@@ -483,7 +483,7 @@ function CalendarToolbar({
       <button
         type="button"
         onClick={onToday}
-        className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary"
+        className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-[#2563eb]/40 hover:text-[#2563eb]"
       >
         Today
       </button>
@@ -491,7 +491,7 @@ function CalendarToolbar({
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-[#2563eb]/40 hover:text-[#2563eb]"
         >
           {view} <span className="ml-2 text-muted-foreground">⌄</span>
         </button>
@@ -505,7 +505,7 @@ function CalendarToolbar({
                   onViewChange(option);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-muted ${view === option ? "bg-muted font-medium text-primary" : ""}`}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-muted ${view === option ? "bg-muted font-medium text-[#2563eb]" : ""}`}
               >
                 {option}
                 <span className="text-xs text-muted-foreground">
@@ -763,10 +763,10 @@ function CalendarGrid({
             {days.map((day) => (
               <div
                 key={day.toISOString()}
-                className={`border-l border-border px-2 py-3 text-center ${isToday(day) ? "bg-primary/10" : ""}`}
+                className={`border-l border-border px-2 py-3 text-center ${isToday(day) ? "bg-[#2563eb]/10" : ""}`}
               >
                 <p
-                  className={`text-xs ${isToday(day) ? "font-semibold text-primary" : "text-muted-foreground"}`}
+                  className={`text-xs ${isToday(day) ? "font-semibold text-[#2563eb]" : "text-muted-foreground"}`}
                 >
                   {dateLabel(day, { weekday: "short" })}
                 </p>
@@ -800,7 +800,7 @@ function CalendarGrid({
                       }}
                       onMouseEnter={() => move(day, hour)}
                       onMouseUp={() => finish(day, hour)}
-                      className={`block h-16 w-full border-b border-border text-left transition ${selected(day, hour) ? "cursor-grabbing bg-primary/20" : event || occupied ? "cursor-pointer" : "cursor-crosshair hover:bg-muted/60"}`}
+                      className={`block h-16 w-full border-b border-border text-left transition ${selected(day, hour) ? "cursor-grabbing bg-[#2563eb]/20" : event || occupied ? "cursor-pointer" : "cursor-crosshair hover:bg-muted/60"}`}
                       aria-label={`${dateLabel(day, { weekday: "long", month: "long", day: "numeric" })} ${formatHour(hour)}`}
                     />
                   );
@@ -914,11 +914,11 @@ function NextConsultationBanner({
     <button
       type="button"
       onClick={() => onOpenDetails(next)}
-      className="mt-6 block w-full rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-transparent p-4 text-left transition hover:border-primary/40 hover:bg-primary/15 sm:p-5"
+      className="mt-6 block w-full rounded-[1.5rem] border border-[#2563eb]/20 bg-gradient-to-r from-[#2563eb]/12 via-[#2563eb]/8 to-transparent p-4 text-left transition hover:border-[#2563eb]/40 hover:bg-[#2563eb]/12 sm:p-5"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-primary">
+          <p className="text-sm font-medium text-[#2563eb]">
             Next approved consultation
           </p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight">
@@ -936,7 +936,7 @@ function NextConsultationBanner({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <Clock className="size-5 text-primary" />
+          <Clock className="size-5 text-[#2563eb]" />
           <div>
             <p className="text-xs text-muted-foreground">Starts in</p>
             <p className="text-sm font-semibold">
@@ -1061,9 +1061,9 @@ function MonthCalendar({
             <div
               key={day.toISOString()}
               onClick={() => createForDay(day)}
-              className={`min-h-32 border-b border-l border-border p-2 ${inMonth ? "bg-card" : "bg-muted/20"} ${isToday(day) ? "ring-2 ring-inset ring-primary/40" : ""}`}
+              className={`min-h-32 border-b border-l border-border p-2 ${inMonth ? "bg-card" : "bg-muted/20"} ${isToday(day) ? "ring-2 ring-inset ring-[#2563eb]/40" : ""}`}
             >
-              <p className={`text-xs font-medium ${isToday(day) ? "text-primary" : inMonth ? "text-foreground" : "text-muted-foreground"}`}>
+              <p className={`text-xs font-medium ${isToday(day) ? "text-[#2563eb]" : inMonth ? "text-foreground" : "text-muted-foreground"}`}>
                 {day.getDate()}
               </p>
               <div className="mt-2 space-y-1">
@@ -1075,7 +1075,7 @@ function MonthCalendar({
                       clickEvent.stopPropagation();
                       onOpenDetails(event.availability);
                     }}
-                    className="block w-full rounded-lg border border-primary/30 bg-primary/10 px-2 py-1 text-left text-xs text-foreground transition hover:bg-primary/20"
+                    className="block w-full rounded-lg border border-[#2563eb]/30 bg-[#2563eb]/10 px-2 py-1 text-left text-xs text-foreground transition hover:bg-[#2563eb]/20"
                   >
                     <span className="flex items-center gap-1 font-semibold">
                       <ConsultationModeIcon
@@ -1152,7 +1152,7 @@ function InstructorAvailabilityEvent({
       onClick={() => onOpenDetails(event)}
       onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
       style={{ top, height, left, width }}
-      className="calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
+      className="calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#60a5fa]/40 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
     >
       <span className="flex items-center gap-1 font-semibold">
         <ConsultationModeIcon mode={event.consultation_mode} className="size-3" />
@@ -1249,7 +1249,7 @@ function AvailabilityEditor({
       >
         <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
           <div className="flex items-center gap-3">
-            <CalendarPlus className="size-5 text-primary" />
+            <CalendarPlus className="size-5 text-[#2563eb]" />
             <div>
               <h3 className="font-medium">Open consultation window</h3>
               <p className="text-sm text-muted-foreground">
@@ -1302,7 +1302,7 @@ function AvailabilityEditor({
               type="button"
               key={value}
               onClick={() => onModeChange(value)}
-              className={`rounded-xl border px-4 py-3 text-left text-sm ${mode === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}
+              className={`rounded-xl border px-4 py-3 text-left text-sm ${mode === value ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-border bg-background"}`}
             >
               <ConsultationModeIcon mode={value} className="mb-2 size-4" />
               {label}
@@ -1317,13 +1317,13 @@ function AvailabilityEditor({
           {programs.map((program) => (
             <label
               key={program}
-              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm ${selectedPrograms.includes(program) ? "border-primary bg-primary/10" : "border-border bg-background"}`}
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm ${selectedPrograms.includes(program) ? "border-[#2563eb] bg-[#2563eb]/10" : "border-border bg-background"}`}
             >
               <input
                 type="checkbox"
                 checked={selectedPrograms.includes(program)}
                 onChange={() => onToggleProgram(program)}
-                className="size-4 accent-indigo-600"
+                className="size-4 accent-blue-600"
               />
               {program}
             </label>
@@ -1340,7 +1340,7 @@ function AvailabilityEditor({
           </button>
           <button
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
           >
             {saving ? "Saving..." : "Open consultation window"}
             <Check className="size-4" />
@@ -1383,7 +1383,7 @@ function AvailabilityDetails({
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2563eb]">
               Consultation window details
             </p>
             <h3 className="mt-2 text-xl font-medium">{date}</h3>
@@ -1432,7 +1432,7 @@ function AvailabilityDetails({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground"
+            className="rounded-full bg-[#2563eb] px-5 py-2 text-sm font-medium text-white"
           >
             Done
           </button>
@@ -1531,7 +1531,7 @@ function OccupiedDetails({
               </button>
               <button
                 disabled={saving}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save new schedule"}
                 <Check className="size-4" />
@@ -1599,7 +1599,7 @@ function OccupiedDetails({
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
                   >
                     <Pencil className="size-4" />
                     Reschedule
@@ -1609,7 +1609,7 @@ function OccupiedDetails({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground"
+                className="rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white"
               >
                 Done
               </button>

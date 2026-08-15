@@ -8,7 +8,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
         <circle cx="23" cy="22" r="3.5" fill="var(--background)" stroke="currentColor" strokeWidth="1.2" />
         <path d="M23 20.5V22L24.2 23" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
       </svg>
-      {!compact && <span className="hidden sm:inline">Consultation Scheduler</span>}
+      {!compact && <span className="hidden sm:inline">BULSU Consult Hub</span>}
     </span>
   );
 }

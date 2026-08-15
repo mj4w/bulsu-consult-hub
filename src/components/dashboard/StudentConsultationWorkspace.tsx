@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -9,11 +10,13 @@ import {
   ChevronRight,
   ClipboardList,
   GraduationCap,
+  LayoutDashboard,
   LockKeyhole,
   MapPin,
   Maximize2,
   Minimize2,
   Monitor,
+  Search,
   Send,
   SquareSplitHorizontal,
   X,
@@ -28,6 +31,11 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import {
+  StudentHistoryPanel,
+  type StudentHistoryRequest,
+} from "@/components/dashboard/StudentHistoryPanel";
+import { ProfileForm } from "@/components/profile/ProfileForm";
 
 import {
   StudentApprovedConsultationModal,
@@ -63,6 +71,8 @@ type ConsultationRequest = {
   status: "pending" | "approved" | "declined" | "cancelled";
   decision_note: string | null;
   created_at: string;
+  microsoft_calendar_event_id: string | null;
+  microsoft_calendar_synced_at: string | null;
   instructor?: { full_name: string | null; email: string | null } | null;
   availability?: {
     consultation_mode: Availability["consultation_mode"];
@@ -163,10 +173,17 @@ function visualEndTimeForCalendarBlock(
 }
 
 type StudentProfile = {
+  full_name: string | null;
   program: string | null;
   section: string | null;
   phone_number: string | null;
+  department: string | null;
+  job_title: string | null;
+  office_location: string | null;
+  role: "student" | "instructor";
 };
+
+type StudentDashboardView = "dashboard" | "calendar" | "history" | "profile";
 
 function normalizeAvailabilityRows(rows: AvailabilityRow[]): Availability[] {
   return rows.map((item) => ({
@@ -193,6 +210,7 @@ function normalizeConsultationRequestRows(
 
 export function StudentConsultationWorkspace({
   displayName,
+  email,
   profile,
   availability,
   requests,
@@ -215,6 +233,10 @@ export function StudentConsultationWorkspace({
     useState<SelectedAvailability | null>(null);
   const [selectedApprovedConsultation, setSelectedApprovedConsultation] =
     useState<ApprovedConsultation | null>(null);
+  const [activeView, setActiveView] =
+    useState<StudentDashboardView>("dashboard");
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -232,6 +254,32 @@ export function StudentConsultationWorkspace({
         new Date(first.requested_start_datetime).getTime() -
         new Date(second.requested_start_datetime).getTime(),
     );
+  const historyRequests = studentRequests.map(
+    (request): StudentHistoryRequest => ({
+      id: request.id,
+      requested_start_datetime: request.requested_start_datetime,
+      requested_end_datetime: request.requested_end_datetime,
+      concern_type: request.concern_type,
+      message: request.message,
+      status: request.status,
+      decision_note: request.decision_note,
+      created_at: request.created_at,
+      instructor: request.instructor ?? null,
+    }),
+  );
+  const dashboardSearchResults = useMemo(() => {
+    const query = dashboardSearch.trim().toLowerCase();
+    if (!query) return [];
+
+    return studentRequests
+      .filter((request) => consultationSearchText(request).includes(query))
+      .sort(
+        (first, second) =>
+          new Date(second.requested_start_datetime).getTime() -
+          new Date(first.requested_start_datetime).getTime(),
+      )
+      .slice(0, 8);
+  }, [dashboardSearch, studentRequests]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -284,7 +332,7 @@ export function StudentConsultationWorkspace({
       const { data, error } = await supabase
         .from("consultation_requests")
         .select(
-          "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
+          "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
         )
         .eq("student_id", user.id)
         .order("created_at", { ascending: false });
@@ -409,7 +457,7 @@ export function StudentConsultationWorkspace({
         message,
       })
       .select(
-        "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
+        "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
       )
       .single();
 
@@ -472,135 +520,277 @@ export function StudentConsultationWorkspace({
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="student-dashboard-shell relative isolate min-h-screen overflow-x-hidden text-foreground">
       <SessionTimeout />
-      <DashboardHeader />
 
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
-        <div className="flex flex-col justify-between gap-5 border-b border-border pb-8 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
-              Student dashboard
-            </p>
-            <h1 className="mt-2 text-3xl font-medium tracking-tight sm:text-4xl">
-              Welcome, {displayName}.
-            </h1>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Keep your academic consultations organized and moving forward.
-            </p>
-          </div>
-          <Link
-            href={profileComplete ? "#calendar" : "/onboarding"}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-          >
-            {profileComplete ? "Find a consultation" : "Complete your profile"}
-            <ChevronRight className="size-4" />
-          </Link>
-        </div>
+      <div className="student-dashboard-backdrop pointer-events-none absolute inset-0 z-0" />
 
-        <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <SummaryCard
-            icon={CalendarRange}
-            label="Upcoming consultations"
-            value={String(upcomingConsultations.length)}
-            detail={
-              upcomingConsultations.length
-                ? "Confirmed meetings"
-                : "No confirmed meetings"
-            }
-          />
-          <SummaryCard
-            icon={ClipboardList}
-            label="Pending requests"
-            value={String(pendingRequests)}
-            detail={
-              pendingRequests
-                ? "Awaiting instructor review"
-                : "No pending requests"
-            }
-          />
-          <SummaryCard
-            icon={UserRound}
-            label="Profile status"
-            value={profileComplete ? "Complete" : "Incomplete"}
-            tone={profileComplete ? "success" : "warning"}
-            detail={profileComplete ? "Ready to request" : "Action required"}
-          />
-        </section>
-
-        <UpcomingConsultationCard
-          requests={upcomingConsultations}
-          onSelect={(request) => setSelectedApprovedConsultation(request)}
+      <div
+        className={`relative z-10 min-h-screen transition-[padding] duration-300 ${
+          sidebarCollapsed ? "lg:pl-20" : "lg:pl-64"
+        }`}
+      >
+        <StudentSidebar
+          activeView={activeView}
+          displayName={displayName}
+          email={email}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
+          onViewChange={setActiveView}
         />
-
-        <section
-          id="calendar"
-          className={`mt-8 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}
-        >
-          <CalendarPanel
-            locked={!profileComplete}
-            availability={availableWindows}
-            requests={studentRequests}
-            profile={profile}
-            occupiedSlots={occupiedConsultations}
-            onSelectAvailability={setSelectedAvailability}
-            onSelectRequest={setSelectedApprovedConsultation}
+        <section className="flex min-w-0 flex-1 flex-col">
+          <StudentTopBar
+            activeView={activeView}
+            sidebarCollapsed={sidebarCollapsed}
+            onViewChange={setActiveView}
+            search={dashboardSearch}
+            onSearchChange={setDashboardSearch}
+            searchResults={dashboardSearchResults}
+            onSelectSearchResult={(request) => {
+              setSelectedApprovedConsultation(request);
+              setDashboardSearch("");
+            }}
           />
-          {!profileComplete && <ProfileStatusPanel complete={false} />}
-        </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Your activity</p>
-                <h2 className="mt-1 text-2xl font-medium tracking-tight">
-                  Consultation history
-                </h2>
+          <div className="w-full px-4 py-5 sm:px-6 lg:px-8 lg:pt-24">
+            <div className="relative rounded-[1.5rem] border border-border bg-card p-5 sm:p-7">
+              <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#2563eb]">
+                    {activeView === "dashboard"
+                      ? "Student dashboard"
+                      : activeView === "calendar"
+                        ? "Calendar"
+                        : activeView === "history"
+                          ? "Consultation history"
+                          : "My profile"}
+                  </p>
+                  <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
+                    {activeView === "dashboard" && `Welcome, ${displayName}.`}
+                    {activeView === "calendar" && "Find a time to talk."}
+                    {activeView === "history" && "Review your requests."}
+                    {activeView === "profile" && "Manage your academic details."}
+                  </h1>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {activeView === "dashboard" &&
+                      "Review your consultation statistics and current status."}
+                    {activeView === "calendar" &&
+                      "Browse available instructor windows and open approved requests."}
+                    {activeView === "history" &&
+                      "Search and review pending, approved, declined, and cancelled consultations."}
+                    {activeView === "profile" &&
+                      "Update the student information instructors need before consultation."}
+                  </p>
+                </div>
+                <Link
+                  href={profileComplete ? "#" : "/onboarding"}
+                  onClick={(event) => {
+                    if (!profileComplete) return;
+                    event.preventDefault();
+                    if (activeView === "calendar") {
+                      setActiveView("history");
+                      return;
+                    }
+                    setActiveView("calendar");
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-4 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:opacity-90"
+                >
+                  {profileComplete
+                    ? activeView === "dashboard"
+                      ? "Open calendar"
+                      : activeView === "calendar"
+                        ? "View history"
+                        : activeView === "history"
+                          ? "Find a time"
+                          : "Open calendar"
+                    : "Complete profile"}
+                  <ChevronRight className="size-4" />
+                </Link>
               </div>
-              <ClipboardList className="size-5 text-muted-foreground" />
             </div>
-            <p className="mt-5 text-sm leading-6 text-muted-foreground">
-              Review all pending, approved, declined, and cancelled consultation
-              requests in one organized page.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <p className="text-xs text-muted-foreground">Total requests</p>
-                <p className="mt-2 text-2xl font-medium">
-                  {studentRequests.length}
+
+            {activeView === "dashboard" && (
+              <>
+                <section className="mt-5 grid gap-4 md:grid-cols-3">
+                  <SummaryCard
+                    icon={CalendarRange}
+                    label="Upcoming consultations"
+                    value={String(upcomingConsultations.length)}
+                    detail={
+                      upcomingConsultations.length
+                        ? "Confirmed meetings"
+                        : "No confirmed meetings"
+                    }
+                  />
+                  <SummaryCard
+                    icon={ClipboardList}
+                    label="Pending requests"
+                    value={String(pendingRequests)}
+                    detail={
+                      pendingRequests
+                        ? "Awaiting instructor review"
+                        : "No pending requests"
+                    }
+                  />
+                  <SummaryCard
+                    icon={UserRound}
+                    label="Profile status"
+                    value={profileComplete ? "Complete" : "Incomplete"}
+                    tone={profileComplete ? "success" : "warning"}
+                    detail={
+                      profileComplete ? "Ready to request" : "Action required"
+                    }
+                  />
+                </section>
+
+                <UpcomingConsultationCard
+                  requests={upcomingConsultations}
+                  onSelect={(request) =>
+                    setSelectedApprovedConsultation(request)
+                  }
+                  onFindTime={() => setActiveView("calendar")}
+                />
+              </>
+            )}
+
+            {activeView === "calendar" && (
+              <section
+                id="calendar"
+                className={`mt-5 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}
+              >
+                <CalendarPanel
+                  locked={!profileComplete}
+                  availability={availableWindows}
+                  requests={studentRequests}
+                  profile={profile}
+                  occupiedSlots={occupiedConsultations}
+                  onSelectAvailability={setSelectedAvailability}
+                  onSelectRequest={setSelectedApprovedConsultation}
+                />
+                {!profileComplete && <ProfileStatusPanel complete={false} />}
+              </section>
+            )}
+
+            {activeView === "history" && (
+              <section className="mt-5">
+                <StudentHistoryPanel initialRequests={historyRequests} />
+              </section>
+            )}
+
+            {activeView === "profile" && (
+              <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+                <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
+                  <p className="text-sm font-semibold text-[#2563eb]">
+                    Account setup
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+                    Keep your details accurate.
+                  </h2>
+                  <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                    Your program and section help limit appointment visibility
+                    to the correct instructor schedules. Your email and student
+                    identity remain read-only.
+                  </p>
+                  <div className="mt-6 rounded-2xl border border-border bg-background/60 p-4 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      Protected student information
+                    </p>
+                    <p className="mt-2 leading-6">
+                      Only authenticated users and instructors connected to your
+                      request can access the required consultation details.
+                    </p>
+                  </div>
+                </div>
+                <ProfileForm profile={profile} email={email} />
+              </section>
+            )}
+
+            {activeView === "dashboard" && (
+            <section className="mt-5 grid gap-6 lg:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Your activity
+                    </p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+                      Consultation history
+                    </h2>
+                  </div>
+                  <ClipboardList className="size-5 text-[#2563eb]" />
+                </div>
+                <p className="mt-5 text-sm leading-6 text-muted-foreground">
+                  Review all pending, approved, declined, and cancelled
+                  consultation requests in one organized page.
                 </p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-border bg-background/55 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Total requests
+                    </p>
+                    <p className="mt-2 text-2xl font-medium">
+                      {studentRequests.length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background/55 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Needs response
+                    </p>
+                    <p className="mt-2 text-2xl font-medium">
+                      {pendingRequests}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveView("history")}
+                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-foreground px-4 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:opacity-90"
+                >
+                  View full history
+                  <ChevronRight className="size-4" />
+                </button>
               </div>
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <p className="text-xs text-muted-foreground">Needs response</p>
-                <p className="mt-2 text-2xl font-medium">{pendingRequests}</p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/student/history"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-            >
-              View full history
-              <ChevronRight className="size-4" />
-            </Link>
-          </div>
 
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <GraduationCap className="size-5" />
+              <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                    <GraduationCap className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Need guidance?
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                      Start with a clear concern
+                    </h2>
+                  </div>
+                </div>
+                <p className="mt-5 text-sm leading-6 text-muted-foreground">
+                  Prepare your research, grades, project, or other academic
+                  question before requesting a meeting.
+                </p>
+                <div className="mt-6 grid gap-3 text-sm">
+                  <div className="rounded-2xl border border-border bg-background/55 p-4">
+                    <p className="font-medium text-foreground">
+                      Before booking
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      Check the instructor, format, and available time range.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background/55 p-4">
+                    <p className="font-medium text-foreground">
+                      After approval
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      Download the calendar invite and prepare your concern
+                      details before the meeting.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Need guidance?</p>
-                <h2 className="mt-1 text-xl font-medium tracking-tight">
-                  Start with a clear concern
-                </h2>
-              </div>
-            </div>
-            <p className="mt-5 text-sm leading-6 text-muted-foreground">
-              Prepare your research, grades, project, or other academic question
-              before requesting a meeting.
-            </p>
+            </section>
+            )}
           </div>
         </section>
       </div>
@@ -633,61 +823,298 @@ export function StudentConsultationWorkspace({
   );
 }
 
-function DashboardHeader() {
+function StudentSidebar({
+  activeView,
+  displayName,
+  email,
+  collapsed,
+  onToggleCollapsed,
+  onViewChange,
+}: {
+  activeView: StudentDashboardView;
+  displayName: string;
+  email: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onViewChange: (view: StudentDashboardView) => void;
+}) {
+  const navButtonClass = (view: StudentDashboardView) =>
+    `flex w-full items-center rounded-xl px-3 py-2.5 text-left transition ${
+      collapsed ? "justify-center" : "gap-3"
+    } ${
+      activeView === view
+        ? "bg-foreground font-semibold text-background"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+    }`;
+
   return (
-    <header className="border-t-4 border-primary border-b border-border bg-card">
-      <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-5 sm:gap-5 sm:px-8 lg:px-12">
+    <aside
+      className={`fixed left-0 top-0 z-50 hidden h-screen overflow-visible border-r border-border bg-card py-5 transition-[width,padding] duration-300 lg:flex lg:flex-col ${
+        collapsed ? "w-20 px-3" : "w-64 px-4"
+      }`}
+    >
+      <div
+        className={`flex gap-2 ${
+          collapsed
+            ? "items-center justify-center"
+            : "items-center justify-between"
+        }`}
+      >
         <Link
           href="/dashboard/student"
-          className="font-semibold tracking-tight"
+          className={`flex min-w-0 items-center gap-3 font-semibold tracking-tight ${
+            collapsed ? "justify-center px-0" : "px-2"
+          }`}
+          aria-label="Refresh student dashboard"
+          title="Student dashboard"
+        >
+          <span className="block min-w-0 overflow-hidden whitespace-nowrap">
+            <BrandLogo compact={collapsed} />
+          </span>
+        </Link>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className={`absolute top-6 z-10 flex size-8 items-center justify-center rounded-full border border-[#2563eb]/30 bg-[#2563eb] text-white shadow-lg shadow-blue-900/20 transition hover:scale-105 hover:bg-[#1d4ed8] ${
+            collapsed ? "right-[-1rem]" : "right-[-1rem]"
+          }`}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronLeft className="size-4" />
+          )}
+        </button>
+      </div>
+
+      <div className="mt-8">
+        <p
+          className={`px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground ${
+            collapsed ? "sr-only" : ""
+          }`}
+        >
+          General
+        </p>
+        <nav className="mt-3 grid gap-1 text-sm">
+          <button
+            type="button"
+            onClick={() => onViewChange("dashboard")}
+            className={navButtonClass("dashboard")}
+            title="Dashboard"
+          >
+            <LayoutDashboard className="size-4" />
+            {!collapsed && <span className="truncate whitespace-nowrap">Dashboard</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("calendar")}
+            className={navButtonClass("calendar")}
+            title="Calendar"
+          >
+            <CalendarRange className="size-4" />
+            {!collapsed && <span className="truncate whitespace-nowrap">Calendar</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("history")}
+            className={navButtonClass("history")}
+            title="History"
+          >
+            <ClipboardList className="size-4" />
+            {!collapsed && <span className="truncate whitespace-nowrap">History</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("profile")}
+            className={navButtonClass("profile")}
+            title="My profile"
+          >
+            <UserRound className="size-4" />
+            {!collapsed && <span className="truncate whitespace-nowrap">My profile</span>}
+          </button>
+        </nav>
+      </div>
+
+      <div
+        className={`mt-auto rounded-2xl border border-border bg-background/70 ${
+          collapsed ? "p-2" : "p-3"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => onViewChange("profile")}
+          className={`flex w-full min-w-0 rounded-xl text-left ${
+            collapsed ? "justify-center" : "items-center gap-3"
+          }`}
+          title={`${displayName} · ${email}`}
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold uppercase text-background">
+            {studentInitials(displayName, email)}
+          </span>
+          {!collapsed && (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate whitespace-nowrap text-sm font-semibold leading-tight">
+                {displayName}
+              </span>
+              <span className="mt-0.5 block truncate whitespace-nowrap text-xs leading-5 text-muted-foreground">
+                {email}
+              </span>
+            </span>
+          )}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function StudentTopBar({
+  activeView,
+  sidebarCollapsed,
+  onViewChange,
+  search,
+  onSearchChange,
+  searchResults,
+  onSelectSearchResult,
+}: {
+  activeView: StudentDashboardView;
+  sidebarCollapsed: boolean;
+  onViewChange: (view: StudentDashboardView) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  searchResults: ConsultationRequest[];
+  onSelectSearchResult: (request: ConsultationRequest) => void;
+}) {
+  const mobileNavButtonClass = (view: StudentDashboardView) =>
+    `shrink-0 rounded-full px-4 py-2 font-medium ${
+      activeView === view
+        ? "bg-foreground text-background"
+        : "border border-border text-muted-foreground"
+    }`;
+  const hasSearch = search.trim().length > 0;
+
+  return (
+    <header
+      className={`sticky top-0 z-40 border-b border-border bg-background/95 shadow-sm backdrop-blur-xl transition-[left] duration-300 lg:fixed lg:right-0 ${
+        sidebarCollapsed ? "lg:left-20" : "lg:left-64"
+      }`}
+    >
+      <div className="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <Link
+          href="/dashboard/student"
+          className="font-semibold tracking-tight lg:hidden"
           aria-label="Refresh student dashboard"
         >
           <BrandLogo />
         </Link>
+
+        <div className="relative hidden min-w-0 flex-1 md:block lg:max-w-md">
+          <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-sm">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search consultations, dates, or instructors"
+              className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+              aria-label="Search consultations"
+            />
+            {hasSearch && (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {hasSearch && (
+            <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+              {searchResults.length > 0 ? (
+                <div className="max-h-96 overflow-y-auto p-2">
+                  {searchResults.map((request) => {
+                    const mode = request.availability?.consultation_mode
+                      ? consultationModeLabel(request.availability.consultation_mode)
+                      : "Consultation";
+
+                    return (
+                      <button
+                        type="button"
+                        key={request.id}
+                        onClick={() => onSelectSearchResult(request)}
+                        className="w-full rounded-xl px-3 py-3 text-left transition hover:bg-muted"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {consultationInstructorName(request)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {consultationSearchDateLabel(request)}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            {request.status}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {concernLabel(request.concern_type)} · {mode}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-5 text-sm text-muted-foreground">
+                  No consultations found.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
-          <nav className="mr-3 hidden items-center gap-7 text-sm text-muted-foreground lg:flex">
-            <a href="#calendar" className="font-medium text-primary">
-              Dashboard
-            </a>
-            <Link
-              href="/dashboard/student/history"
-              className="transition hover:text-foreground"
-            >
-              History
-            </Link>
-            <a href="/onboarding" className="transition hover:text-foreground">
-              My profile
-            </a>
-          </nav>
           <NotificationBell role="student" />
           <ThemeToggle />
           <LogoutButton />
         </div>
       </div>
-      <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-8 lg:hidden lg:px-12">
-        <Link
-          href="/dashboard/student"
-          className="shrink-0 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground"
+      <nav className="flex gap-2 overflow-x-auto border-t border-border px-4 py-3 text-sm text-muted-foreground sm:px-6 lg:hidden">
+        <button
+          type="button"
+          onClick={() => onViewChange("dashboard")}
+          className={mobileNavButtonClass("dashboard")}
         >
           Dashboard
-        </Link>
-        <Link
-          href="/dashboard/student/history"
-          className="shrink-0 rounded-full border border-border px-4 py-2"
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("calendar")}
+          className={mobileNavButtonClass("calendar")}
+        >
+          Calendar
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("history")}
+          className={mobileNavButtonClass("history")}
         >
           History
-        </Link>
-        <Link
-          href="/onboarding"
-          className="shrink-0 rounded-full border border-border px-4 py-2"
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("profile")}
+          className={mobileNavButtonClass("profile")}
         >
           My profile
-        </Link>
+        </button>
       </nav>
     </header>
   );
 }
-
 function SummaryCard({
   icon: Icon,
   label,
@@ -702,29 +1129,35 @@ function SummaryCard({
   tone?: "default" | "success" | "warning";
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+    <motion.div
+      whileHover={{ y: -5 }}
+      transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      className="relative rounded-[1.5rem] border border-border bg-card p-4 shadow-sm sm:p-5"
+    >
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <Icon className="size-7 text-primary" />
+        <Icon className="size-7 text-[#2563eb]" />
       </div>
       <p
-        className={`mt-5 text-3xl font-medium tracking-tight ${tone === "warning" ? "text-amber-600" : tone === "success" ? "text-emerald-600" : ""}`}
+        className={`relative mt-5 text-3xl font-medium tracking-tight ${tone === "warning" ? "text-amber-600" : tone === "success" ? "text-emerald-600" : ""}`}
       >
         {value}
       </p>
-      <div className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
+      <div className="relative mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
         {detail}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function UpcomingConsultationCard({
   requests,
   onSelect,
+  onFindTime,
 }: {
   requests: ConsultationRequest[];
   onSelect: (request: ConsultationRequest) => void;
+  onFindTime: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const activePosition = requests.length ? activeIndex % requests.length : 0;
@@ -732,7 +1165,7 @@ function UpcomingConsultationCard({
 
   if (!request) {
     return (
-      <section className="mt-6 rounded-2xl border border-dashed border-border bg-card p-6 sm:p-7">
+      <section className="mt-6 rounded-[1.75rem] border border-dashed border-[#2563eb]/25 bg-card p-6 shadow-sm sm:p-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-muted-foreground">
@@ -746,12 +1179,13 @@ function UpcomingConsultationCard({
               instructor confirms one.
             </p>
           </div>
-          <Link
-            href="#calendar"
-            className="inline-flex items-center justify-center rounded-full border border-border px-5 py-3 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+          <button
+            type="button"
+            onClick={onFindTime}
+            className="inline-flex items-center justify-center rounded-full border border-[#2563eb]/25 px-5 py-3 text-sm font-medium text-muted-foreground transition hover:border-[#2563eb]/45 hover:text-[#2563eb]"
           >
             Find a time
-          </Link>
+          </button>
         </div>
       </section>
     );
@@ -777,8 +1211,7 @@ function UpcomingConsultationCard({
     <section className="relative mt-6">
       {hasMoreMeetings && (
         <>
-          <div className="absolute inset-x-4 top-3 h-full rounded-3xl bg-transparent shadow-[0_18px_0_-8px_rgba(75,85,201,0.18)] dark:shadow-[0_18px_0_-8px_rgba(129,140,248,0.18)]" />
-          <div className="absolute inset-x-8 top-6 h-full rounded-3xl bg-transparent shadow-[0_22px_0_-8px_rgba(75,85,201,0.1)] dark:shadow-[0_22px_0_-8px_rgba(129,140,248,0.12)]" />
+          <div className="absolute inset-x-4 top-3 h-full rounded-3xl border border-[#2563eb]/10" />
         </>
       )}
 
@@ -786,10 +1219,9 @@ function UpcomingConsultationCard({
         type="button"
         key={request.id}
         onClick={() => onSelect(request)}
-        className="consultation-card-swap relative block w-full overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary via-primary to-indigo-500 text-left text-primary-foreground shadow-lg shadow-primary/10 transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-primary/20"
+        className="consultation-card-swap relative block w-full overflow-hidden rounded-[1.75rem] border border-[#60a5fa]/35 bg-gradient-to-br from-[#3b82f6] via-[#2563eb] to-[#1d4ed8] text-left text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#2563eb]/20"
       >
         <div className="relative flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="pointer-events-none absolute -right-16 -top-28 size-64 rounded-full bg-white/10 blur-3xl" />
 
           <div className="relative min-w-0 flex-1">
             <div className="inline-flex items-center rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] shadow-sm backdrop-blur">
@@ -798,19 +1230,19 @@ function UpcomingConsultationCard({
             <h2 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">
               Next consultation scheduled
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-5 text-primary-foreground/80">
+            <p className="mt-2 max-w-2xl text-sm leading-5 text-white/80">
               Approved by {instructorName}. Prepare your concern details before
               the meeting.
             </p>
             {hasMoreMeetings && (
-              <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-primary-foreground/60">
+              <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-white/60">
                 {activePosition + 1} of {requests.length} upcoming meetings
               </p>
             )}
           </div>
 
           <div className="relative flex shrink-0 flex-col gap-3 rounded-2xl border border-white/20 bg-white/12 p-3 backdrop-blur-sm sm:min-w-[28rem] sm:flex-row sm:items-center">
-            <div className="overflow-hidden rounded-xl bg-white text-primary shadow-md shadow-primary/20">
+            <div className="overflow-hidden rounded-xl bg-white text-[#2563eb] shadow-md shadow-blue-900/20">
               <div className="bg-slate-950 px-5 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.22em] text-white">
                 {calendarMonth}
               </div>
@@ -828,13 +1260,13 @@ function UpcomingConsultationCard({
                 })}
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-white/14 px-3 py-1 text-primary-foreground/90">
+                <span className="rounded-full bg-white/[0.14] px-3 py-1 text-white/90">
                   {format}
                 </span>
-                <span className="rounded-full bg-white/14 px-3 py-1 text-primary-foreground/90">
+                <span className="rounded-full bg-white/[0.14] px-3 py-1 text-white/90">
                   {timeLabel(start)} - {timeLabel(end)}
                 </span>
-                <span className="rounded-full bg-white/14 px-3 py-1 capitalize text-primary-foreground/85">
+                <span className="rounded-full bg-white/[0.14] px-3 py-1 capitalize text-white/85">
                   {request.concern_type}
                 </span>
               </div>
@@ -857,7 +1289,7 @@ function UpcomingConsultationCard({
                 showNextMeeting();
               }
             }}
-            className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-primary shadow-md shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-white/90"
+            className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#2563eb] shadow-md shadow-blue-900/20 transition hover:-translate-y-0.5 hover:bg-white/90"
           >
             Next
             <ChevronRight className="size-4" />
@@ -930,16 +1362,38 @@ function CalendarPanel({
       ),
     [weekDays, visibleAvailability, occupiedSlots, pendingRequests],
   );
-  const expandedDayCount = weekDays.filter(
-    (day) => (requestableSlotsByDay.get(localDateKey(day))?.length ?? 0) > 1,
+  const dayColumnMetrics = useMemo(
+    () =>
+      weekDays.map((day) => {
+        const dayKey = localDateKey(day);
+        const dayLayout = layoutStudentCalendarDay({
+          availabilitySlots: requestableSlotsByDay.get(dayKey) ?? [],
+          requests: visibleStudentRequests.filter((request) =>
+            consultationRequestTouchesDay(request, day),
+          ),
+        });
+        const requestCount = dayLayout.requestSlots.length;
+        const requestMaxLaneCount = Math.max(
+          1,
+          ...dayLayout.requestSlots.map((slot) => slot.laneCount),
+        );
+
+        return {
+          dayKey,
+          shouldExpand: requestMaxLaneCount > 1 || requestCount > 2,
+        };
+      }),
+    [weekDays, requestableSlotsByDay, visibleStudentRequests],
+  );
+  const expandedDayCount = dayColumnMetrics.filter(
+    (metric) => metric.shouldExpand,
   ).length;
   const calendarMinWidthRem =
-    3.5 + expandedDayCount * 20 + (7 - expandedDayCount) * 9;
+    3.5 + expandedDayCount * 18 + (7 - expandedDayCount) * 10;
   const calendarColumns = `3.5rem ${weekDays
-    .map((day) => {
-      const slotCount =
-        requestableSlotsByDay.get(localDateKey(day))?.length ?? 0;
-      return slotCount > 1 ? "minmax(20rem, 2.4fr)" : "minmax(9rem, 1fr)";
+    .map((day, index) => {
+      const shouldExpand = dayColumnMetrics[index]?.shouldExpand;
+      return shouldExpand ? "minmax(18rem, 2fr)" : "minmax(10rem, 0.9fr)";
     })
     .join(" ")}`;
 
@@ -967,7 +1421,7 @@ function CalendarPanel({
       className={`relative border border-border bg-card p-4 transition-all sm:p-8 ${
         fullView
           ? "flex h-full w-full flex-col overflow-hidden rounded-none border-0 bg-background p-0"
-          : "overflow-hidden rounded-2xl"
+          : "overflow-hidden rounded-[1.5rem] bg-card"
       }`}
     >
       {fullView && (
@@ -975,14 +1429,14 @@ function CalendarPanel({
           <button
             type="button"
             onClick={goToToday}
-            className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:border-primary/40 hover:text-primary"
+            className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
           >
             Today
           </button>
           <button
             type="button"
             onClick={() => moveWeek(-1)}
-            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground"
+            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
             aria-label="Previous week"
           >
             <ChevronLeft className="size-4" />
@@ -993,7 +1447,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={() => moveWeek(1)}
-            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground"
+            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
             aria-label="Next week"
           >
             <ChevronRight className="size-4" />
@@ -1001,7 +1455,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={() => setFullView(false)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
             aria-label="Exit full calendar view"
           >
             <Minimize2 className="size-3.5" />
@@ -1023,7 +1477,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={goToToday}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+            className="rounded-xl border border-border px-3 py-2 text-sm font-semibold transition hover:bg-muted"
           >
             Today
           </button>
@@ -1031,7 +1485,7 @@ function CalendarPanel({
             <button
               type="button"
               onClick={() => moveWeek(-1)}
-              className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground"
+              className="rounded-xl border border-border p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
               aria-label="Previous week"
             >
               <ChevronLeft className="size-4" />
@@ -1042,7 +1496,7 @@ function CalendarPanel({
             <button
               type="button"
               onClick={() => moveWeek(1)}
-              className="rounded-lg border border-border p-2 text-muted-foreground transition hover:text-foreground"
+              className="rounded-xl border border-border p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
               aria-label="Next week"
             >
               <ChevronRight className="size-4" />
@@ -1051,7 +1505,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={() => setFullView(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Open full calendar view"
           >
             <Maximize2 className="size-3.5" />
@@ -1070,7 +1524,7 @@ function CalendarPanel({
           Swipe the calendar sideways to see wider day columns.
         </p>
         <div
-          className={`overflow-auto border border-border ${fullView ? "m-0 min-h-0 flex-1 rounded-none border-0" : "mt-3 max-h-[44rem] rounded-xl sm:mt-5"}`}
+          className={`overflow-auto border border-border bg-background/35 ${fullView ? "m-0 min-h-0 flex-1 rounded-none border-0" : "mt-3 max-h-[44rem] rounded-[1.25rem] sm:mt-5"}`}
         >
           <div
             className={fullView ? "min-h-full" : ""}
@@ -1084,16 +1538,17 @@ function CalendarPanel({
               {weekDays.map((day) => {
                 const dayKey = localDateKey(day);
                 const hasMultipleSlots =
-                  (requestableSlotsByDay.get(dayKey)?.length ?? 0) > 1;
+                  dayColumnMetrics.find((metric) => metric.dayKey === dayKey)
+                    ?.shouldExpand ?? false;
 
                 return (
                   <div
                     key={day.toISOString()}
                     className={`border-l border-border px-2 py-3 text-center transition ${
                       hasMultipleSlots
-                        ? "bg-primary/15"
+                        ? "bg-[#2563eb]/15"
                         : isSameDay(day, new Date())
-                          ? "bg-primary/10"
+                          ? "bg-[#2563eb]/10"
                           : ""
                     }`}
                   >
@@ -1101,7 +1556,7 @@ function CalendarPanel({
                       {day.toLocaleDateString(undefined, { weekday: "short" })}
                     </p>
                     <p
-                      className={`mt-1 text-sm font-medium ${hasMultipleSlots || isSameDay(day, new Date()) ? "text-primary" : ""}`}
+                      className={`mt-1 text-sm font-medium ${hasMultipleSlots || isSameDay(day, new Date()) ? "text-[#2563eb]" : ""}`}
                     >
                       {day.getDate()}
                     </p>
@@ -1166,7 +1621,7 @@ function CalendarPanel({
       {locked && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/55 px-6 backdrop-blur-[1px]">
           <div className="max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-lg">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-primary">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2563eb]/10 text-[#2563eb]">
               <LockKeyhole className="size-5" />
             </div>
             <h3 className="mt-4 text-lg font-medium">
@@ -1178,7 +1633,7 @@ function CalendarPanel({
             </p>
             <Link
               href="/onboarding"
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#1d4ed8]"
             >
               Go to my profile <ChevronRight className="size-4" />
             </Link>
@@ -1223,7 +1678,7 @@ function StudentAvailabilityEvent({
   return (
     <button
       type="button"
-      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-primary/30 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
+      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#60a5fa]/40 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
       style={{ top, height }}
       title={format}
     >
@@ -1272,8 +1727,14 @@ function StudentRequestableSlot({
   const height = Math.max(34, (endHour - startHour) * 64);
   const gap = 4;
   const laneWidth = 100 / slot.laneCount;
-  const width = `calc(${laneWidth}% - ${gap}px)`;
-  const left = `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`;
+  const width =
+    slot.laneCount > 1
+      ? `calc(${laneWidth}% - ${gap}px)`
+      : "min(9.5rem, calc(100% - 16px))";
+  const left =
+    slot.laneCount > 1
+      ? `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`
+      : "8px";
 
   return (
     <button
@@ -1352,62 +1813,67 @@ function StudentCalendarRequestSlot({
   const roomy = height >= 92;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(request)}
-      className={`absolute z-30 overflow-hidden rounded-lg border text-left shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-primary/20 ${
+    <div
+      className={`absolute z-30 overflow-hidden rounded-lg border text-left shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-4 focus-within:ring-[#2563eb]/20 ${
         isApproved
           ? "border-emerald-300/80 bg-emerald-500/90 text-white dark:border-emerald-300/60 dark:bg-emerald-400/80 dark:text-emerald-950"
           : "border-amber-300/80 bg-amber-300/90 text-amber-950 dark:border-amber-300/60 dark:bg-amber-400/80"
-      } ${
-        compact
-          ? "flex items-center gap-1.5 px-2 py-1 text-[10px]"
-          : "flex flex-col justify-center px-3 py-2 text-xs"
       }`}
       style={{ top, height, left, width }}
       title={`${status} consultation details`}
     >
-      <span
-        className={`inline-flex w-fit items-center rounded-full font-bold uppercase shadow-sm ${
-          isApproved
-            ? "bg-white/25 text-white dark:bg-emerald-100/80 dark:text-emerald-950"
-            : "bg-white/70 text-amber-900 dark:bg-amber-100/80 dark:text-amber-950"
-        } ${
+      <button
+        type="button"
+        onClick={() => onSelect(request)}
+        className={`flex h-full w-full text-left focus:outline-none ${
           compact
-            ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]"
-            : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
+            ? "items-center gap-1.5 px-2 pb-1 pt-7 text-[10px]"
+            : `flex-col justify-center px-3 pb-2 pt-9 text-xs`
         }`}
       >
-        {status}
-      </span>
-      <span
-        className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}
-      >
-        {request.availability?.consultation_mode && (
-          <ConsultationModeIcon
-            mode={request.availability.consultation_mode}
-            className="size-3"
-          />
-        )}
-        {format}
-      </span>
-      <span
-        className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}
-      >
-        {timeRange}
-      </span>
-      {roomy && (
         <span
-          className={`mt-1 block whitespace-normal break-words text-[11px] leading-tight capitalize ${
+          className={`absolute left-2 top-2 inline-flex w-fit items-center rounded-full font-bold uppercase shadow-sm ${
             isApproved
-              ? "text-white/85 dark:text-emerald-950/80"
-              : "text-amber-900/85 dark:text-amber-950/80"
+              ? "bg-white/25 text-white dark:bg-emerald-100/80 dark:text-emerald-950"
+              : "bg-white/70 text-amber-900 dark:bg-amber-100/80 dark:text-amber-950"
+          } ${
+            compact
+              ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]"
+              : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
           }`}
         >
-          {request.concern_type}
+          {status}
         </span>
-      )}
-    </button>
+        <span
+          className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}
+        >
+          {request.availability?.consultation_mode && (
+            <ConsultationModeIcon
+              mode={request.availability.consultation_mode}
+              className="size-3"
+            />
+          )}
+          {format}
+        </span>
+        <span
+          className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}
+        >
+          {timeRange}
+        </span>
+        {roomy && (
+          <span
+            className={`mt-1 block whitespace-normal break-words text-[11px] leading-tight capitalize ${
+              isApproved
+                ? "text-white/85 dark:text-emerald-950/80"
+                : "text-amber-900/85 dark:text-amber-950/80"
+            }`}
+          >
+            {request.concern_type}
+          </span>
+        )}
+      </button>
+
+    </div>
   );
 }
 
@@ -1498,9 +1964,9 @@ function RequestConsultationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <form
         onSubmit={submit}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-2xl sm:p-7"
+        className="flex h-[min(90vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card/95 px-5 py-4 sm:px-7">
           <div>
             <p className="text-sm text-muted-foreground">
               Request consultation
@@ -1529,8 +1995,9 @@ function RequestConsultationModal({
           </button>
         </div>
 
-        {choices.length > 1 && (
-          <div className="mt-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+          {choices.length > 1 && (
+            <div>
             <p className="text-sm font-medium">Choose instructor</p>
             <div className="mt-3 grid gap-3">
               {choices.map((choice, index) => {
@@ -1549,8 +2016,8 @@ function RequestConsultationModal({
                     }}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       selected
-                        ? "border-primary bg-primary/10 text-foreground shadow-sm"
-                        : "border-border bg-background hover:border-primary/40"
+                        ? "border-[#2563eb] bg-[#2563eb]/10 text-foreground shadow-sm"
+                        : "border-border bg-background hover:border-[#2563eb]/40"
                     }`}
                   >
                     <span className="block text-sm font-semibold">
@@ -1570,10 +2037,10 @@ function RequestConsultationModal({
                 );
               })}
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        <div className="mt-5">
+          <div className="mt-5">
           <p className="text-sm font-medium">Select your preferred time</p>
           {startOptions.length ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1621,9 +2088,9 @@ function RequestConsultationModal({
               Occupied portions are removed from the time choices.
             </p>
           )}
-        </div>
+          </div>
 
-        <div className="mt-5">
+          <div className="mt-5">
           <p className="text-sm font-medium">Purpose</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {(
@@ -1638,15 +2105,15 @@ function RequestConsultationModal({
                 type="button"
                 key={value}
                 onClick={() => setConcernType(value)}
-                className={`rounded-xl border px-4 py-3 text-left text-sm transition ${concernType === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:border-primary/40"}`}
+                className={`rounded-xl border px-4 py-3 text-left text-sm transition ${concernType === value ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-border bg-background hover:border-[#2563eb]/40"}`}
               >
                 {label}
               </button>
             ))}
           </div>
-        </div>
+          </div>
 
-        <label className="mt-5 block text-sm font-medium">
+          <label className="mt-5 block text-sm font-medium">
           Concern details
           <textarea
             className="profile-input min-h-32 resize-none"
@@ -1655,9 +2122,10 @@ function RequestConsultationModal({
             placeholder="Briefly explain what you want to consult about."
             required
           />
-        </label>
+          </label>
+        </div>
 
-        <div className="mt-6 flex justify-end gap-3 border-t border-border pt-5">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-border px-5 py-4 sm:px-7">
           <button
             type="button"
             onClick={onClose}
@@ -1667,7 +2135,7 @@ function RequestConsultationModal({
           </button>
           <button
             disabled={saving || !selectedStart || !selectedEnd}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
           >
             {saving ? "Sending..." : "Send request"}
             <Send className="size-4" />
@@ -1974,6 +2442,14 @@ function consultationModeLabel(mode: Availability["consultation_mode"]) {
       ? "Online"
       : "Online or F2F";
 }
+function concernLabel(concern: ConsultationRequest["concern_type"]) {
+  return {
+    research: "Research",
+    grades: "Grades",
+    projects: "Projects",
+    others: "Other",
+  }[concern];
+}
 function ConsultationModeIcon({
   mode,
   className = "size-4",
@@ -1990,6 +2466,47 @@ function consultationInstructorName(request: ConsultationRequest) {
   if (name) return name;
   const emailName = request.instructor?.email?.split("@")[0]?.trim();
   return emailName || "the instructor";
+}
+function consultationSearchDateLabel(request: ConsultationRequest) {
+  const start = new Date(request.requested_start_datetime);
+  const end = new Date(request.requested_end_datetime);
+
+  return `${start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}, ${timeLabel(start)} - ${timeLabel(end)}`;
+}
+function consultationSearchText(request: ConsultationRequest) {
+  const mode = request.availability?.consultation_mode
+    ? consultationModeLabel(request.availability.consultation_mode)
+    : "";
+
+  return [
+    consultationInstructorName(request),
+    request.instructor?.email,
+    concernLabel(request.concern_type),
+    request.concern_type,
+    request.status,
+    mode,
+    request.message,
+    request.decision_note,
+    consultationSearchDateLabel(request),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+function studentInitials(displayName: string, email: string) {
+  const source = displayName.trim() || email.split("@")[0] || "Student";
+  const initials = source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("");
+
+  return initials || "S";
 }
 function instructorScheduleColor(availability: Availability) {
   const palette = [
@@ -2079,7 +2596,7 @@ function weekLabel(start: Date, end: Date) {
 }
 function ProfileStatusPanel({ complete }: { complete: boolean }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+    <section className="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm sm:p-8">
       <p className="text-sm text-muted-foreground">Profile setup</p>
       <h2 className="mt-1 text-2xl font-medium tracking-tight">
         {complete ? "You are ready" : "Finish your details"}
@@ -2093,13 +2610,13 @@ function ProfileStatusPanel({ complete }: { complete: boolean }) {
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-border">
           <div
-            className={`h-full rounded-full bg-primary transition-all ${complete ? "w-full" : "w-1/2"}`}
+            className={`h-full rounded-full bg-[#2563eb] transition-all ${complete ? "w-full" : "w-1/2"}`}
           />
         </div>
       </div>
       <Link
         href="/onboarding"
-        className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+        className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-[#2563eb] hover:underline"
       >
         {complete ? "Update my profile" : "Complete my profile"}{" "}
         <ChevronRight className="size-4" />

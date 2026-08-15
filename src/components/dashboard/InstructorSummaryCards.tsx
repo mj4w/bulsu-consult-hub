@@ -128,10 +128,10 @@ function SummaryCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-[1.5rem] border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <Icon className="size-7 text-primary" />
+        <Icon className="size-7 text-[#2563eb]" />
       </div>
       <p className="mt-5 text-3xl font-medium tracking-tight">{value}</p>
       <p className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
