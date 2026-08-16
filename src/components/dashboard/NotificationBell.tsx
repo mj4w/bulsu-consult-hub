@@ -145,13 +145,11 @@ export function NotificationBell({ role }: { role?: UserRole }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "consultation_requests" }, () => refreshNotifications())
       .subscribe();
 
-    const interval = window.setInterval(refreshNotifications, 10000);
     const refreshOnFocus = () => refreshNotifications();
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, [readKeys, resolvedRole, userId]);
@@ -291,7 +289,7 @@ function notificationHref(notification: RequestNotification, role: UserRole | nu
   const request = encodeURIComponent(notification.id);
   return role === "instructor"
     ? `/dashboard/instructor/requests?request=${request}`
-    : `/dashboard/student/history?request=${request}`;
+    : `/dashboard/student?request=${request}#history`;
 }
 
 function shortRequestId(id: string) {

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   CalendarRange,
   ClipboardList,
@@ -101,7 +101,7 @@ export default async function InstructorDashboardPage() {
             <section className="mt-6 grid gap-6 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#a51c30]/10 text-[#a51c30]">
                     <ClipboardList className="size-5" />
                   </div>
                   <div>
@@ -120,7 +120,7 @@ export default async function InstructorDashboardPage() {
                 </p>
                 <Link
                   href="/dashboard/instructor/requests"
-                  className="mt-5 inline-flex text-sm font-medium text-[#2563eb] hover:underline"
+                  className="mt-5 inline-flex text-sm font-medium text-[#a51c30] hover:underline"
                 >
                   Open requests
                 </Link>
@@ -128,7 +128,7 @@ export default async function InstructorDashboardPage() {
 
               <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#a51c30]/10 text-[#a51c30]">
                     <CalendarRange className="size-5" />
                   </div>
                   <div>
@@ -168,7 +168,7 @@ export default async function InstructorDashboardPage() {
         profileContent={
           <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
             <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
-              <p className="text-sm font-semibold text-[#2563eb]">
+              <p className="text-sm font-semibold text-[#a51c30]">
                 Instructor identity
               </p>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight">
@@ -181,7 +181,7 @@ export default async function InstructorDashboardPage() {
             </div>
             <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#2563eb]/10 text-[#2563eb]">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#a51c30]/10 text-[#a51c30]">
                   <UserRound className="size-5" />
                 </div>
                 <div>
@@ -209,3 +209,4 @@ export default async function InstructorDashboardPage() {
     </>
   );
 }
+

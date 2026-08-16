@@ -2,12 +2,10 @@
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
-  CalendarCheck,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   MapPin,
   Monitor,
   Pencil,
@@ -153,13 +151,11 @@ export function InstructorAvailabilityManager({
       .on("postgres_changes", { event: "*", schema: "public", table: "consultation_requests" }, () => refreshOccupiedConsultations())
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => refreshOccupiedConsultations())
       .subscribe();
-    const interval = window.setInterval(() => refreshCalendar({ silent: true }), 5000);
     const refreshOnFocus = () => refreshCalendar({ silent: true });
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);
@@ -413,10 +409,6 @@ export function InstructorAvailabilityManager({
           <Plus className="size-4" /> Add consultation window
         </button>
       </div>
-      <NextConsultationBanner
-        consultations={occupiedConsultations}
-        onOpenDetails={setOccupiedDetails}
-      />
       <CalendarGrid
         key={selectionResetToken}
         items={items}
@@ -554,6 +546,7 @@ function CalendarGrid({
   const [selectionEnd, setSelectionEnd] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [selectionDay, setSelectionDay] = useState<string | null>(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => new Date().getTime());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -577,6 +570,14 @@ function CalendarGrid({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [todayToken]);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setCurrentTimeMs(new Date().getTime()),
+      60_000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
 
   if (!weekStart)
     return <div className="mt-7 h-80 animate-pulse rounded-2xl bg-muted/40" />;
@@ -832,6 +833,7 @@ function CalendarGrid({
                       end={event.end}
                       lane={event.lane}
                       laneCount={event.laneCount}
+                      currentTimeMs={currentTimeMs}
                       onOpenDetails={onOpenDetails}
                     />
                   ))}
@@ -842,13 +844,11 @@ function CalendarGrid({
                       new Date(first.requested_start_datetime).getTime() -
                       new Date(second.requested_start_datetime).getTime(),
                   )
-                  .map((request, index, requestsForDay) => (
+                  .map((request) => (
                     <OccupiedConsultationEvent
                       key={`${request.id}-${day.toISOString()}`}
                       request={request}
                       day={day}
-                      lane={index}
-                      laneCount={requestsForDay.length}
                       onOpenDetails={onOpenOccupiedDetails}
                     />
                   ))}
@@ -858,96 +858,6 @@ function CalendarGrid({
         </div>
       </div>
     </div>
-  );
-}
-
-function NextConsultationBanner({
-  consultations,
-  onOpenDetails,
-}: {
-  consultations: OccupiedConsultation[];
-  onOpenDetails: (request: OccupiedConsultation) => void;
-}) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const upcoming = consultations
-    .filter((request) => {
-      if (!now) return true;
-      return new Date(request.requested_end_datetime).getTime() >= now;
-    })
-    .sort(byConsultationStart);
-  const next = upcoming[0];
-
-  if (!next) {
-    return (
-      <section className="mt-6 rounded-2xl border border-dashed border-border bg-muted/20 p-4 sm:p-5">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
-              Next approved consultation
-            </p>
-            <h3 className="mt-1 text-xl font-medium tracking-tight">
-              No confirmed student schedule yet
-            </h3>
-          </div>
-          <CalendarCheck className="size-7 text-muted-foreground" />
-        </div>
-      </section>
-    );
-  }
-
-  const start = new Date(next.requested_start_datetime);
-  const end = new Date(next.requested_end_datetime);
-  const remaining = Math.max(0, start.getTime() - now);
-  const remainingHours = Math.floor(remaining / 3_600_000);
-  const remainingMinutes = Math.max(
-    0,
-    Math.round((remaining % 3_600_000) / 60_000),
-  );
-
-  return (
-    <button
-      type="button"
-      onClick={() => onOpenDetails(next)}
-      className="mt-6 block w-full rounded-[1.5rem] border border-[#2563eb]/20 bg-gradient-to-r from-[#2563eb]/12 via-[#2563eb]/8 to-transparent p-4 text-left transition hover:border-[#2563eb]/40 hover:bg-[#2563eb]/12 sm:p-5"
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-[#2563eb]">
-            Next approved consultation
-          </p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight">
-            {studentName(next)}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {dateLabel(start, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}{" "}
-            at {dateLabel(start, { hour: "numeric", minute: "2-digit" })} -{" "}
-            {dateLabel(end, { hour: "numeric", minute: "2-digit" })}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <Clock className="size-5 text-[#2563eb]" />
-          <div>
-            <p className="text-xs text-muted-foreground">Starts in</p>
-            <p className="text-sm font-semibold">
-              {remainingHours > 0
-                ? `${remainingHours}h ${remainingMinutes}m`
-                : `${remainingMinutes}m`}
-            </p>
-          </div>
-        </div>
-      </div>
-    </button>
   );
 }
 
@@ -1118,6 +1028,7 @@ function InstructorAvailabilityEvent({
   end,
   lane,
   laneCount,
+  currentTimeMs,
   onOpenDetails,
 }: {
   availability: Availability;
@@ -1125,6 +1036,7 @@ function InstructorAvailabilityEvent({
   end: Date;
   lane: number;
   laneCount: number;
+  currentTimeMs: number;
   onOpenDetails: (item: Availability) => void;
 }) {
   const event = availability;
@@ -1138,27 +1050,35 @@ function InstructorAvailabilityEvent({
   const time = `${dateLabel(new Date(event.start_datetime), { hour: "numeric", minute: "2-digit" })} – ${dateLabel(new Date(event.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
-  const top = (startHour - 7) * 64;
-  const height = Math.max(76, (endHour - startHour) * 64);
+  const rawHeight = Math.max(0, (endHour - startHour) * 64);
+  const top = (startHour - 7) * 64 + 2;
+  const height = Math.max(28, rawHeight - 4);
+  const compact = height < 52;
   const gap = 4;
   const laneWidth = 100 / laneCount;
   const width = `calc(${laneWidth}% - ${gap}px)`;
   const left = `calc(${lane * laneWidth}% + ${gap / 2}px)`;
   const dailyTime = `${dateLabel(start, { hour: "numeric", minute: "2-digit" })} - ${dateLabel(end, { hour: "numeric", minute: "2-digit" })}`;
+  const isPast = end.getTime() <= currentTimeMs;
+
   return (
     <button
       type="button"
-      title={format}
+      title={isPast ? `Past availability: ${format}` : format}
       onClick={() => onOpenDetails(event)}
       onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
       style={{ top, height, left, width }}
-      className="calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#60a5fa]/40 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
+      className={`calendar-availability absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#60a5fa]/40 px-2 text-left text-white shadow-sm transition ${
+        isPast ? "grayscale opacity-45 saturate-0 hover:opacity-60" : ""
+      } ${
+        compact ? "py-0.5 text-[9px] leading-[1.05]" : "py-1.5 text-xs leading-tight"
+      }`}
     >
-      <span className="flex items-center gap-1 font-semibold">
+      <span className="flex items-center gap-1 truncate font-semibold">
         <ConsultationModeIcon mode={event.consultation_mode} className="size-3" />
         {format}
       </span>
-      <span className="block truncate">{dailyTime}</span>
+      <span className="block truncate font-medium">{dailyTime}</span>
     </button>
   );
 }
@@ -1166,14 +1086,10 @@ function InstructorAvailabilityEvent({
 function OccupiedConsultationEvent({
   request,
   day,
-  lane,
-  laneCount,
   onOpenDetails,
 }: {
   request: OccupiedConsultation;
   day: Date;
-  lane: number;
-  laneCount: number;
   onOpenDetails: (request: OccupiedConsultation) => void;
 }) {
   if (!requestTouchesDay(request, day)) return null;
@@ -1182,14 +1098,11 @@ function OccupiedConsultationEvent({
   const end = new Date(request.requested_end_datetime);
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
-  const top = (startHour - 7) * 64;
-  const height = Math.max(76, (endHour - startHour) * 64);
+  const rawHeight = Math.max(0, (endHour - startHour) * 64);
+  const top = (startHour - 7) * 64 + 2;
+  const height = Math.max(28, rawHeight - 4);
+  const compact = height < 52;
   const time = `${dateLabel(start, { hour: "numeric", minute: "2-digit" })} - ${dateLabel(end, { hour: "numeric", minute: "2-digit" })}`;
-  const colors = programColorClasses(request.student?.program);
-  const gap = 4;
-  const laneWidth = 100 / laneCount;
-  const width = `calc(${laneWidth}% - ${gap}px)`;
-  const left = `calc(${lane * laneWidth}% + ${gap / 2}px)`;
 
   return (
     <button
@@ -1197,17 +1110,26 @@ function OccupiedConsultationEvent({
       title={`Occupied by ${studentName(request)}`}
       onClick={() => onOpenDetails(request)}
       onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
-      style={{ top, height, left, width }}
-      className={`absolute z-20 flex flex-col justify-center overflow-hidden rounded-lg border px-2 py-1.5 text-left text-xs text-white shadow-sm transition ${colors.solid}`}
+      style={{
+        top,
+        height,
+        left: "0.25rem",
+        right: "0.25rem",
+      }}
+      className={`absolute z-20 flex flex-col justify-center overflow-hidden rounded-lg border border-[#9fcdbf]/80 bg-[#4f9b83]/90 px-2 text-left text-white shadow-sm shadow-slate-950/10 transition hover:bg-[#458d78] ${
+        compact ? "py-0.5 text-[9px] leading-[1.05]" : "py-1.5 text-xs leading-tight"
+      }`}
     >
-      <span className="flex items-center gap-1 font-semibold">
+      <span className="flex items-center gap-1 truncate font-semibold">
         <UserRound className="size-3" />
         Approved
       </span>
       <span className="block truncate">{time}</span>
-      <span className="mt-1 block truncate text-[11px] text-white/90">
-        {studentName(request)}
-      </span>
+      {!compact && (
+        <span className="mt-1 block truncate text-[11px] text-white/90">
+          {studentName(request)}
+        </span>
+      )}
     </button>
   );
 }

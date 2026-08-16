@@ -1,6 +1,15 @@
 "use client";
 
-import { Check, ClipboardList, Clock, UserRound, X } from "lucide-react";
+import {
+  Check,
+  ClipboardList,
+  Clock,
+  GraduationCap,
+  Mail,
+  Phone,
+  Search,
+  X,
+} from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -44,6 +53,7 @@ export function InstructorRequestsPanel({
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [pendingPage, setPendingPage] = useState(1);
   const [reviewedPage, setReviewedPage] = useState(1);
+  const [search, setSearch] = useState("");
   const [pendingDecisions, setPendingDecisions] = useState<PendingDecision[]>([]);
   const pendingDecisionsRef = useRef<PendingDecision[]>([]);
 
@@ -85,13 +95,11 @@ export function InstructorRequestsPanel({
       .on("postgres_changes", { event: "*", schema: "public", table: "consultation_requests" }, () => refreshRequests())
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => refreshRequests())
       .subscribe();
-    const interval = window.setInterval(() => refreshRequests({ silent: true }), 5000);
     const refreshOnFocus = () => refreshRequests({ silent: true });
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);
@@ -227,12 +235,21 @@ export function InstructorRequestsPanel({
     setUpdatingId(null);
   }
 
-  const pending = requests
+  const visibleRequests = requests.filter((request) =>
+    instructorRequestSearchText(request).includes(search.trim().toLowerCase()),
+  );
+  const pending = visibleRequests
     .filter((request) => request.status === "pending")
-    .sort(byRequestedStart);
-  const reviewed = requests
+    .sort(byRequestedStartDesc);
+  const reviewed = visibleRequests
     .filter((request) => request.status !== "pending")
-    .sort(byRequestedStart);
+    .sort(byRequestedStartDesc);
+  const approvedCount = requests.filter(
+    (request) => request.status === "approved",
+  ).length;
+  const declinedCount = requests.filter(
+    (request) => request.status === "declined",
+  ).length;
   const pendingTotalPages = Math.max(1, Math.ceil(pending.length / pageSize));
   const reviewedTotalPages = Math.max(1, Math.ceil(reviewed.length / pageSize));
   const safePendingPage = Math.min(pendingPage, pendingTotalPages);
@@ -241,17 +258,49 @@ export function InstructorRequestsPanel({
   const paginatedReviewed = reviewed.slice((safeReviewedPage - 1) * pageSize, safeReviewedPage * pageSize);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 sm:p-8">
-      <div className="flex items-center justify-between">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex flex-col justify-between gap-4 border-b border-border bg-muted/20 px-4 py-5 sm:flex-row sm:items-start sm:px-6">
         <div>
-          <p className="text-sm text-muted-foreground">Consultation requests</p>
-          <h2 className="mt-1 text-2xl font-medium tracking-tight">Approve or decline</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            Consultation requests
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+            Review student requests
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Check the student, schedule, purpose, and response status before
+            approving.
+          </p>
         </div>
-        <ClipboardList className="size-5 text-muted-foreground" />
+        <div className="flex size-11 items-center justify-center rounded-xl border border-border bg-background text-primary shadow-sm">
+          <ClipboardList className="size-5" />
+        </div>
+      </div>
+
+      <div className="grid gap-3 border-b border-border px-4 py-4 sm:grid-cols-3 sm:px-6">
+        <RequestMetric label="Pending review" value={pending.length} tone="primary" />
+        <RequestMetric label="Approved" value={approvedCount} tone="success" />
+        <RequestMetric label="Declined" value={declinedCount} tone="muted" />
+      </div>
+
+      <div className="border-b border-border px-4 py-4 sm:px-6">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPendingPage(1);
+              setReviewedPage(1);
+            }}
+            placeholder="Search by student, program, date, purpose, status, or message"
+            className="w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
+          />
+        </label>
       </div>
 
       {requests.length ? (
-        <div className="mt-7 space-y-6">
+        <div className="space-y-5 p-4 sm:p-6">
           <RequestSection
             title="Pending review"
             description="Start here. These requests need your approval or decline."
@@ -300,7 +349,7 @@ export function InstructorRequestsPanel({
           </RequestSection>
         </div>
       ) : (
-        <div className="mt-7 flex min-h-36 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 text-center">
+        <div className="m-4 flex min-h-36 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 text-center sm:m-6">
           <p className="max-w-sm text-sm leading-6 text-muted-foreground">
             Students who choose your open consultation windows will appear here for review.
           </p>
@@ -308,6 +357,31 @@ export function InstructorRequestsPanel({
       )}
 
       {toast && <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+function RequestMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "primary" | "success" | "muted";
+}) {
+  const classes = {
+    primary: "bg-primary/10 text-primary",
+    success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    muted: "bg-muted text-muted-foreground",
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={`mt-2 inline-flex rounded-full px-3 py-1 text-lg font-semibold ${classes[tone]}`}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -435,44 +509,75 @@ function RequestCard({
     request.student?.email?.split("@")[0] ||
     "Student";
   const studentEmail = request.student?.email?.trim();
+  const studentPhone = request.student?.phone_number?.trim();
   const color = programColorClasses(request.student?.program);
   const time = requestTimeLabel(request);
   const isPending = request.status === "pending";
 
   return (
-    <article className={`rounded-2xl border bg-card p-5 shadow-sm ${color.card} ${isPending ? "ring-1 ring-primary/10" : ""}`}>
-      <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-              <UserRound className="size-3.5" />
-              Student
-            </span>
-            <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${color.badge}`}>
-              {request.status}
-            </span>
+    <article className={`rounded-2xl border bg-card p-4 shadow-sm sm:p-5 ${color.card} ${isPending ? "ring-1 ring-primary/10" : ""}`}>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-sm font-bold text-primary shadow-sm">
+            {initials(studentName)}
           </div>
-          <h3 className="mt-3 text-xl font-semibold tracking-tight">{studentName}</h3>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {request.student?.program ?? "Program not set"}
-            {request.student?.section ? `, ${request.student.section}` : ""}
-          </p>
-          {studentEmail && (
-            <p className="mt-1 text-sm text-muted-foreground">{studentEmail}</p>
-          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${color.badge}`}>
+                {request.status}
+              </span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-foreground">
+                {request.concern_type}
+              </span>
+            </div>
+            <h3 className="mt-2 truncate text-lg font-semibold tracking-tight">{studentName}</h3>
+            <div className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+              <p className="flex gap-2">
+                <GraduationCap className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>
+                  {request.student?.program ?? "Program not set"}
+                  {request.student?.section ? `, ${request.student.section}` : ""}
+                </span>
+              </p>
+              {studentEmail && (
+                <p className="flex gap-2">
+                  <Mail className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span className="truncate">{studentEmail}</span>
+                </p>
+              )}
+              {studentPhone && (
+                <p className="flex gap-2">
+                  <Phone className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{studentPhone}</span>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 lg:min-w-64">
+
+        <div className="rounded-2xl border border-border bg-muted/25 px-4 py-3">
           <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
             <Clock className="size-4" />
             Requested time
           </p>
-          <p className="mt-2 text-base font-semibold leading-6 text-foreground">{time}</p>
+          <p className="mt-2 text-base font-semibold leading-6 text-foreground">
+            {time}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Sent {new Date(request.created_at).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-4">
-        <p className="text-sm font-semibold capitalize text-foreground">Purpose: {request.concern_type}</p>
-        <p className="mt-2 text-sm leading-7 text-muted-foreground">{request.message}</p>
+      <div className="mt-4 rounded-2xl border border-border bg-muted/25 p-4">
+        <p className="text-sm font-semibold text-foreground">Concern details</p>
+        <p className="mt-2 text-sm leading-7 text-muted-foreground">
+          {request.message || "No concern details provided."}
+        </p>
       </div>
 
       {request.decision_note && (
@@ -532,11 +637,47 @@ function requestTimeLabel(request: InstructorRequest) {
   return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}, ${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} - ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
-function byRequestedStart(first: InstructorRequest, second: InstructorRequest) {
+function byRequestedStartDesc(first: InstructorRequest, second: InstructorRequest) {
   return (
-    new Date(first.requested_start_datetime).getTime() -
-    new Date(second.requested_start_datetime).getTime()
+    new Date(second.requested_start_datetime).getTime() -
+    new Date(first.requested_start_datetime).getTime()
   );
+}
+
+function instructorRequestSearchText(request: InstructorRequest) {
+  const studentName =
+    request.student?.full_name?.trim() ||
+    request.student?.email?.split("@")[0] ||
+    "";
+  return [
+    studentName,
+    request.student?.email,
+    request.student?.program,
+    request.student?.section,
+    request.student?.phone_number,
+    request.concern_type,
+    request.status,
+    request.message,
+    request.decision_note,
+    requestTimeLabel(request),
+    new Date(request.created_at).toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function initials(name: string) {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return `${parts[0]?.[0] ?? "S"}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
 function normalizeInstructorRequests(

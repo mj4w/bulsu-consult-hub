@@ -38,7 +38,6 @@ export function PendingRequestsBadge() {
       console.error("Pending requests realtime failed:", error);
     }
 
-    const interval = window.setInterval(refreshCount, 10000);
     const refreshOnFocus = () => refreshCount();
     window.addEventListener("focus", refreshOnFocus);
 
@@ -46,7 +45,6 @@ export function PendingRequestsBadge() {
       if (channel) {
         supabase.removeChannel(channel);
       }
-      window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);

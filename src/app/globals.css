@@ -1,41 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  --calendar-availability: #3b82f6;
-  --background: #f7f7f5;
-  --foreground: #171717;
+  --calendar-availability: #5277b8;
+  --background: #fffaf0;
+  --foreground: #241316;
   --paper: #ffffff;
   --ink: #171717;
   --card: #ffffff;
   --card-foreground: #171717;
-  --primary: #111111;
+  --primary: #a51c30;
   --primary-foreground: #ffffff;
-  --muted: #f0f0ee;
-  --muted-foreground: #6f6f6a;
-  --accent: #eef8f4;
-  --accent-foreground: #17634e;
-  --border: #e7e5df;
-  --ring: #111111;
-  --accent-soft: #dbeafe;
+  --muted: #f7efe1;
+  --muted-foreground: #6b5442;
+  --accent: #fff4cc;
+  --accent-foreground: #8f1728;
+  --border: #ead9b8;
+  --ring: #f5b800;
+  --accent-soft: #f7d56b;
 }
 
 :root[data-theme="dark"] {
-  --calendar-availability: #2563eb;
-  --background: #111827;
+  --calendar-availability: #5f83c2;
+  --background: #08111f;
   --foreground: #eef2ff;
   --paper: #eef2ff;
   --ink: #0b1220;
-  --card: #182235;
+  --card: #111827;
   --card-foreground: #eef2ff;
-  --primary: #818cf8;
-  --primary-foreground: #111827;
-  --muted: #202d42;
-  --muted-foreground: #a9b4c8;
-  --accent: #1d3b3b;
-  --accent-foreground: #b8f3dc;
-  --border: #2d3b52;
-  --ring: #a5b4fc;
-  --accent-soft: #b8f3dc;
+  --primary: #f5b800;
+  --primary-foreground: #08111f;
+  --muted: #17233d;
+  --muted-foreground: #aebbd0;
+  --accent: #1f2a44;
+  --accent-foreground: #f7d56b;
+  --border: #2a3854;
+  --ring: #f5b800;
+  --accent-soft: #f7d56b;
 }
 
 :root:not([data-theme="dark"]) .bg-white {
@@ -64,8 +64,8 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   background-image:
-    radial-gradient(circle at 8% 2%, rgba(37, 99, 235, 0.05), transparent 28rem),
-    radial-gradient(circle at 92% 22%, rgba(20, 184, 166, 0.04), transparent 25rem),
+    radial-gradient(circle at 8% 2%, rgba(245, 184, 0, 0.08), transparent 28rem),
+    radial-gradient(circle at 92% 22%, rgba(165, 28, 48, 0.06), transparent 25rem),
     linear-gradient(rgba(23, 23, 23, 0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(23, 23, 23, 0.018) 1px, transparent 1px);
   background-size: auto, auto, 5rem 5rem, 5rem 5rem;
@@ -74,8 +74,8 @@ body {
 
 :root[data-theme="dark"] body {
   background-image:
-    radial-gradient(circle at 8% 2%, rgba(99, 102, 241, 0.24), transparent 28rem),
-    radial-gradient(circle at 92% 22%, rgba(20, 184, 166, 0.13), transparent 25rem),
+    radial-gradient(circle at 8% 2%, rgba(245, 184, 0, 0.14), transparent 28rem),
+    radial-gradient(circle at 92% 22%, rgba(37, 99, 235, 0.12), transparent 25rem),
     linear-gradient(rgba(238, 242, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(238, 242, 255, 0.035) 1px, transparent 1px);
   background-size: auto, auto, 5rem 5rem, 5rem 5rem;
@@ -87,7 +87,7 @@ body::after {
   z-index: 0;
   pointer-events: none;
   content: "";
-  border: 1px solid rgba(79, 70, 229, 0.09);
+  border: 1px solid rgba(165, 28, 48, 0.09);
   border-radius: 9999px;
   transform: rotate(-18deg);
 }
@@ -104,7 +104,7 @@ body::after {
   left: -28rem;
   height: 38rem;
   width: 80rem;
-  border-color: rgba(15, 159, 122, 0.08);
+  border-color: rgba(245, 184, 0, 0.12);
   transform: rotate(14deg);
 }
 
@@ -133,8 +133,8 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   :root:not([data-theme="dark"]) .app-theme-toggle,
   :root:not([data-theme="dark"]) .app-theme-toggle:hover,
   :root:not([data-theme="dark"]) .app-theme-toggle:focus-visible {
-    border-color: rgba(37, 99, 235, 0.42) !important;
-    background-color: #2563eb !important;
+    border-color: rgba(165, 28, 48, 0.36) !important;
+    background-color: #a51c30 !important;
     color: #ffffff !important;
   }
   :root:not([data-theme="dark"]) .app-theme-toggle svg,
@@ -142,14 +142,14 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
     color: #ffffff !important;
   }
   :root:not([data-theme="dark"]) .app-theme-toggle:hover {
-    border-color: rgba(29, 78, 216, 0.55) !important;
-    background-color: #1d4ed8 !important;
+    border-color: rgba(143, 23, 40, 0.55) !important;
+    background-color: #8f1728 !important;
   }
   :root[data-theme="dark"] .app-theme-toggle,
   :root[data-theme="dark"] .app-theme-toggle:hover,
   :root[data-theme="dark"] .app-theme-toggle:focus-visible {
-    border-color: rgba(37, 99, 235, 0.42) !important;
-    background-color: #2563eb !important;
+    border-color: rgba(245, 184, 0, 0.34) !important;
+    background-color: #173b7a !important;
     color: #ffffff !important;
   }
   :root[data-theme="dark"] .app-theme-toggle svg,
@@ -157,7 +157,7 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
     color: #ffffff !important;
   }
   :root[data-theme="dark"] .app-theme-toggle:hover {
-    border-color: rgba(29, 78, 216, 0.55) !important;
+    border-color: rgba(245, 184, 0, 0.5) !important;
     background-color: #1d4ed8 !important;
   }
   .landing-theme-toggle,
@@ -179,27 +179,27 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   .profile-input::placeholder { color: var(--muted-foreground); opacity: 0.7; }
   .profile-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent); }
   .profile-input:disabled { color: var(--muted-foreground); opacity: 1; }
-  .bg-primary\/20 { background-color: #93c5fd !important; color: #172554 !important; }
-  .bg-primary\/10 { background-color: #dbeafe !important; color: #1e3a8a !important; }
-  .calendar-availability { background-color: #3b82f6 !important; color: #ffffff !important; }
-  .calendar-availability-cell { background-color: var(--calendar-availability) !important; color: #ffffff !important; border-left-color: rgba(147, 197, 253, 0.6) !important; border-bottom-color: transparent !important; }
-  .calendar-event-start { border-top: 1px solid rgba(147, 197, 253, 0.6) !important; border-radius: 0.5rem 0.5rem 0 0; }
-  .calendar-event-end { border-bottom: 1px solid rgba(147, 197, 253, 0.6) !important; border-radius: 0 0 0.5rem 0.5rem; }
-  .calendar-availability:hover { background-color: #2563eb !important; }
-  :root[data-theme="dark"] .bg-primary\/20 { background-color: #2563eb !important; color: #ffffff !important; }
-  :root[data-theme="dark"] .bg-primary\/10 { background-color: #1e3a8a !important; color: #ffffff !important; }
-  :root[data-theme="dark"] .calendar-availability { background-color: #2563eb !important; }
-  :root[data-theme="dark"] .calendar-availability-cell { background-color: var(--calendar-availability) !important; border-left-color: rgba(147, 197, 253, 0.42) !important; }
-  :root[data-theme="dark"] .calendar-event-start { border-top-color: rgba(147, 197, 253, 0.42) !important; }
-  :root[data-theme="dark"] .calendar-event-end { border-bottom-color: rgba(147, 197, 253, 0.42) !important; }
+  .bg-primary\/20 { background-color: #f7d56b !important; color: #241316 !important; }
+  .bg-primary\/10 { background-color: #fff4cc !important; color: #8f1728 !important; }
+  .calendar-availability { background-color: #5277b8 !important; color: #ffffff !important; }
+  .calendar-availability-cell { background-color: var(--calendar-availability) !important; color: #ffffff !important; border-left-color: rgba(245, 184, 0, 0.55) !important; border-bottom-color: transparent !important; }
+  .calendar-event-start { border-top: 1px solid rgba(245, 184, 0, 0.55) !important; border-radius: 0.5rem 0.5rem 0 0; }
+  .calendar-event-end { border-bottom: 1px solid rgba(245, 184, 0, 0.55) !important; border-radius: 0 0 0.5rem 0.5rem; }
+  .calendar-availability:hover { background-color: #4669a8 !important; }
+  :root[data-theme="dark"] .bg-primary\/20 { background-color: #5277b8 !important; color: #ffffff !important; }
+  :root[data-theme="dark"] .bg-primary\/10 { background-color: #1f2a44 !important; color: #f7d56b !important; }
+  :root[data-theme="dark"] .calendar-availability { background-color: #5f83c2 !important; }
+  :root[data-theme="dark"] .calendar-availability-cell { background-color: var(--calendar-availability) !important; border-left-color: rgba(245, 184, 0, 0.42) !important; }
+  :root[data-theme="dark"] .calendar-event-start { border-top-color: rgba(245, 184, 0, 0.42) !important; }
+  :root[data-theme="dark"] .calendar-event-end { border-bottom-color: rgba(245, 184, 0, 0.42) !important; }
   button[class*="bg-primary/10"][class*="hover:bg-primary/20"] {
     background-color: var(--calendar-availability) !important;
     color: #ffffff !important;
     border-color: color-mix(in srgb, #ffffff 26%, var(--calendar-availability)) !important;
-    box-shadow: 0 0.5rem 1rem rgba(37, 99, 235, 0.16);
+    box-shadow: 0 0.5rem 1rem rgba(82, 119, 184, 0.16);
   }
   button[class*="bg-primary/10"][class*="hover:bg-primary/20"]:hover {
-    background-color: #2563eb !important;
+    background-color: #4669a8 !important;
     color: #ffffff !important;
   }
   button.bg-primary\/10, button.bg-primary\/20 { border-bottom-color: transparent !important; }
@@ -230,15 +230,18 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   .student-dashboard-shell,
   .academic-dashboard-shell { background: var(--background); }
   :root:not([data-theme="dark"]) .student-dashboard-shell {
-    background: #f7f7f5;
+    background: #fffaf0;
   }
-  :root:not([data-theme="dark"]) .student-dashboard-shell aside {
-    background: #f4f4f2;
+  :root:not([data-theme="dark"]) .student-dashboard-shell aside,
+  :root:not([data-theme="dark"]) .academic-dashboard-shell aside {
+    background: #fff7e6;
   }
-  :root:not([data-theme="dark"]) .student-dashboard-shell header {
-    background: rgba(247, 247, 245, 0.88);
+  :root:not([data-theme="dark"]) .student-dashboard-shell header,
+  :root:not([data-theme="dark"]) .academic-dashboard-shell header {
+    background: rgba(255, 250, 240, 0.9);
   }
-  :root:not([data-theme="dark"]) .student-dashboard-shell .bg-card {
+  :root:not([data-theme="dark"]) .student-dashboard-shell .bg-card,
+  :root:not([data-theme="dark"]) .academic-dashboard-shell .bg-card {
     background-color: #ffffff;
   }
   :root:not([data-theme="dark"]) .student-dashboard-shell .bg-background\/55,
@@ -247,22 +250,28 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
     background-color: rgba(255, 255, 255, 0.72);
   }
   .student-dashboard-backdrop {
-    background: linear-gradient(180deg, rgba(247, 247, 245, 0.98), rgba(247, 247, 245, 0.92));
+    background:
+      radial-gradient(circle at 10% 4%, rgba(245, 184, 0, 0.12), transparent 24rem),
+      radial-gradient(circle at 92% 18%, rgba(165, 28, 48, 0.08), transparent 28rem),
+      linear-gradient(180deg, rgba(255, 250, 240, 0.98), rgba(255, 247, 230, 0.92));
   }
   .academic-dashboard-backdrop {
     background:
-      radial-gradient(circle at 12% 4%, rgba(37, 99, 235, 0.09), transparent 24rem),
-      linear-gradient(135deg, rgba(220, 227, 237, 0.98), rgba(211, 220, 232, 0.9));
+      radial-gradient(circle at 12% 4%, rgba(245, 184, 0, 0.12), transparent 24rem),
+      radial-gradient(circle at 92% 18%, rgba(165, 28, 48, 0.08), transparent 28rem),
+      linear-gradient(135deg, rgba(255, 250, 240, 0.98), rgba(255, 247, 230, 0.9));
   }
   :root[data-theme="dark"] .student-dashboard-backdrop {
     background:
-      radial-gradient(circle at 12% 4%, rgba(37, 99, 235, 0.16), transparent 24rem),
-      linear-gradient(135deg, rgba(11, 18, 32, 0.98), rgba(17, 24, 39, 0.96));
+      radial-gradient(circle at 12% 4%, rgba(245, 184, 0, 0.11), transparent 24rem),
+      radial-gradient(circle at 88% 16%, rgba(37, 99, 235, 0.12), transparent 28rem),
+      linear-gradient(135deg, rgba(8, 17, 31, 0.98), rgba(12, 25, 48, 0.96));
   }
   :root[data-theme="dark"] .academic-dashboard-backdrop {
     background:
-      radial-gradient(circle at 12% 4%, rgba(37, 99, 235, 0.16), transparent 24rem),
-      linear-gradient(135deg, rgba(11, 18, 32, 0.98), rgba(17, 24, 39, 0.96));
+      radial-gradient(circle at 12% 4%, rgba(245, 184, 0, 0.11), transparent 24rem),
+      radial-gradient(circle at 88% 16%, rgba(37, 99, 235, 0.12), transparent 28rem),
+      linear-gradient(135deg, rgba(8, 17, 31, 0.98), rgba(12, 25, 48, 0.96));
   }
 }
 

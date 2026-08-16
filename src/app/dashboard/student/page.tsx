@@ -80,15 +80,8 @@ export default async function StudentDashboardPage() {
     requested_end_datetime: string;
   }>;
 
-  const workspaceVersion = [
-    availability.map((item) => item.id).join(","),
-    requests.map((request) => `${request.id}:${request.status}`).join(","),
-    occupiedSlots.map((slot) => slot.id).join(","),
-  ].join("|");
-
   return (
     <StudentConsultationWorkspace
-      key={workspaceVersion}
       displayName={displayName}
       email={user.email ?? ""}
       profile={

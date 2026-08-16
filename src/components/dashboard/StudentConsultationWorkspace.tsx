@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   CalendarRange,
@@ -22,7 +22,7 @@ import {
   X,
   UserRound,
 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { SessionTimeout } from "@/components/auth/SessionTimeout";
@@ -140,38 +140,6 @@ type StudentCalendarLayout = {
   requestSlots: StudentRequestSlot[];
 };
 
-function readableCalendarBlockHeight(
-  baseHeight: number,
-  textValues: string[],
-  laneCount: number,
-) {
-  const visibleTextLength = textValues.join(" ").length;
-  const narrowLanePenalty = laneCount > 1 ? 18 : 0;
-  const wrappedTextPenalty = Math.min(
-    36,
-    Math.max(0, Math.ceil((visibleTextLength - 42) / 22) * 12),
-  );
-
-  return Math.max(baseHeight, 76 + narrowLanePenalty + wrappedTextPenalty);
-}
-
-function visualEndTimeForCalendarBlock(
-  start: Date,
-  actualEnd: Date,
-  textValues: string[],
-) {
-  const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
-  const endHour = Math.min(
-    21,
-    actualEnd.getHours() + actualEnd.getMinutes() / 60,
-  );
-  const baseHeight = Math.max(34, (endHour - startHour) * 64);
-  const readableHeight = readableCalendarBlockHeight(baseHeight, textValues, 1);
-  const visualDurationMs = (readableHeight / 64) * 60 * 60 * 1000;
-
-  return Math.max(actualEnd.getTime(), start.getTime() + visualDurationMs);
-}
-
 type StudentProfile = {
   full_name: string | null;
   program: string | null;
@@ -223,7 +191,6 @@ export function StudentConsultationWorkspace({
   requests: ConsultationRequest[];
   occupiedSlots: OccupiedSlot[];
 }) {
-  const router = useRouter();
   const profileComplete = Boolean(profile?.program && profile?.section);
   const [availableWindows, setAvailableWindows] = useState(availability);
   const [studentRequests, setStudentRequests] = useState(requests);
@@ -237,6 +204,7 @@ export function StudentConsultationWorkspace({
     useState<StudentDashboardView>("dashboard");
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const searchParams = useSearchParams();
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -282,12 +250,50 @@ export function StudentConsultationWorkspace({
   }, [dashboardSearch, studentRequests]);
 
   useEffect(() => {
+    function viewFromHash(): StudentDashboardView | null {
+      const hash = window.location.hash.replace("#", "");
+      return hash === "calendar" ||
+        hash === "history" ||
+        hash === "profile" ||
+        hash === "dashboard"
+        ? hash
+        : null;
+    }
+
+    const syncFromHash = () => {
+      const nextView = viewFromHash();
+      if (nextView) setActiveView(nextView);
+    };
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, []);
+
+  useEffect(() => {
+    if (!searchParams.get("request")) return;
+
+    const timer = window.setTimeout(() => {
+      setActiveView("history");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
+  function changeActiveView(view: StudentDashboardView) {
+    setActiveView(view);
+    const nextHash = view === "dashboard" ? "" : `#${view}`;
+    const nextUrl = `${window.location.pathname}${nextHash}`;
+    window.history.replaceState(null, "", nextUrl);
+  }
+
+  useEffect(() => {
     const supabase = createClient();
 
     async function refreshAvailability({
       silent = false,
-      refreshRoute = false,
-    }: { silent?: boolean; refreshRoute?: boolean } = {}) {
+    }: { silent?: boolean } = {}) {
       const { data, error } = await supabase
         .from("instructor_availability")
         .select(
@@ -316,9 +322,6 @@ export function StudentConsultationWorkspace({
           ? null
           : current,
       );
-      if (refreshRoute) {
-        router.refresh();
-      }
     }
 
     async function refreshRequests({
@@ -383,7 +386,7 @@ export function StudentConsultationWorkspace({
     function refreshStudentWorkspace({
       silent = false,
     }: { silent?: boolean } = {}) {
-      void refreshAvailability({ silent, refreshRoute: true });
+      void refreshAvailability({ silent });
       void refreshRequests({ silent });
       void refreshOccupiedSlots({ silent });
     }
@@ -393,12 +396,12 @@ export function StudentConsultationWorkspace({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "instructor_availability" },
-        () => refreshAvailability({ refreshRoute: true }),
+        () => refreshAvailability(),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "availability_programs" },
-        () => refreshAvailability({ refreshRoute: true }),
+        () => refreshAvailability(),
       )
       .on(
         "postgres_changes",
@@ -408,23 +411,18 @@ export function StudentConsultationWorkspace({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "profiles" },
-        () => refreshAvailability({ refreshRoute: true }),
+        () => refreshAvailability(),
       )
       .subscribe();
 
-    const interval = window.setInterval(
-      () => refreshStudentWorkspace({ silent: true }),
-      5000,
-    );
     const refreshOnFocus = () => refreshStudentWorkspace({ silent: true });
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [router]);
+  }, []);
 
   async function submitRequest(
     availabilityItem: Availability,
@@ -462,10 +460,14 @@ export function StudentConsultationWorkspace({
       .single();
 
     if (error || !data) {
-      const duplicate = error?.code === "23505";
+      const exactStudentDuplicate =
+        error?.code === "23505" &&
+        error.message.includes(
+          "consultation_requests_student_active_exact_time",
+        );
       setToast({
-        message: duplicate
-          ? "You already sent a request for this consultation window."
+        message: exactStudentDuplicate
+          ? "You already sent a request for this exact time slot."
           : (error?.message ?? "Could not send your consultation request."),
         tone: "error",
       });
@@ -499,7 +501,6 @@ export function StudentConsultationWorkspace({
     );
 
     setSelectedApprovedConsultation(updatedRequest);
-    router.refresh();
   }
 
   function handleApprovedConsultationCancelled(requestId: string) {
@@ -516,7 +517,6 @@ export function StudentConsultationWorkspace({
     );
 
     setSelectedApprovedConsultation(null);
-    router.refresh();
   }
 
   return (
@@ -536,13 +536,13 @@ export function StudentConsultationWorkspace({
           email={email}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
-          onViewChange={setActiveView}
+          onViewChange={changeActiveView}
         />
         <section className="flex min-w-0 flex-1 flex-col">
           <StudentTopBar
             activeView={activeView}
             sidebarCollapsed={sidebarCollapsed}
-            onViewChange={setActiveView}
+            onViewChange={changeActiveView}
             search={dashboardSearch}
             onSearchChange={setDashboardSearch}
             searchResults={dashboardSearchResults}
@@ -556,7 +556,7 @@ export function StudentConsultationWorkspace({
             <div className="relative rounded-[1.5rem] border border-border bg-card p-5 sm:p-7">
               <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#2563eb]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a51c30]">
                     {activeView === "dashboard"
                       ? "Student dashboard"
                       : activeView === "calendar"
@@ -588,10 +588,10 @@ export function StudentConsultationWorkspace({
                     if (!profileComplete) return;
                     event.preventDefault();
                     if (activeView === "calendar") {
-                      setActiveView("history");
+                      changeActiveView("history");
                       return;
                     }
-                    setActiveView("calendar");
+                    changeActiveView("calendar");
                   }}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-4 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:opacity-90"
                 >
@@ -648,7 +648,7 @@ export function StudentConsultationWorkspace({
                   onSelect={(request) =>
                     setSelectedApprovedConsultation(request)
                   }
-                  onFindTime={() => setActiveView("calendar")}
+                  onFindTime={() => changeActiveView("calendar")}
                 />
               </>
             )}
@@ -680,7 +680,7 @@ export function StudentConsultationWorkspace({
             {activeView === "profile" && (
               <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
                 <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
-                  <p className="text-sm font-semibold text-[#2563eb]">
+                  <p className="text-sm font-semibold text-[#a51c30]">
                     Account setup
                   </p>
                   <h2 className="mt-3 text-2xl font-semibold tracking-tight">
@@ -717,7 +717,7 @@ export function StudentConsultationWorkspace({
                       Consultation history
                     </h2>
                   </div>
-                  <ClipboardList className="size-5 text-[#2563eb]" />
+                  <ClipboardList className="size-5 text-[#a51c30]" />
                 </div>
                 <p className="mt-5 text-sm leading-6 text-muted-foreground">
                   Review all pending, approved, declined, and cancelled
@@ -743,7 +743,7 @@ export function StudentConsultationWorkspace({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveView("history")}
+                  onClick={() => changeActiveView("history")}
                   className="mt-6 inline-flex items-center gap-2 rounded-xl bg-foreground px-4 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:opacity-90"
                 >
                   View full history
@@ -753,7 +753,7 @@ export function StudentConsultationWorkspace({
 
               <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#a51c30]/10 text-[#a51c30]">
                     <GraduationCap className="size-5" />
                   </div>
                   <div>
@@ -795,22 +795,26 @@ export function StudentConsultationWorkspace({
         </section>
       </div>
       {selectedAvailability && (
-        <RequestConsultationModal
-          choices={selectedAvailability.choices}
-          occupiedSlots={occupiedConsultations}
-          onClose={() => setSelectedAvailability(null)}
-          onSubmit={submitRequest}
-        />
+        <BodyPortal>
+          <RequestConsultationModal
+            choices={selectedAvailability.choices}
+            occupiedSlots={occupiedConsultations}
+            onClose={() => setSelectedAvailability(null)}
+            onSubmit={submitRequest}
+          />
+        </BodyPortal>
       )}
       {selectedApprovedConsultation && (
-        <StudentApprovedConsultationModal
-          key={`${selectedApprovedConsultation.id}-${selectedApprovedConsultation.status}-${selectedApprovedConsultation.concern_type}-${selectedApprovedConsultation.message}`}
-          request={selectedApprovedConsultation}
-          onClose={() => setSelectedApprovedConsultation(null)}
-          onUpdated={handleApprovedConsultationUpdated}
-          onCancelled={handleApprovedConsultationCancelled}
-          onToast={(message, tone) => setToast({ message, tone })}
-        />
+        <BodyPortal>
+          <StudentApprovedConsultationModal
+            key={`${selectedApprovedConsultation.id}-${selectedApprovedConsultation.status}-${selectedApprovedConsultation.concern_type}-${selectedApprovedConsultation.message}`}
+            request={selectedApprovedConsultation}
+            onClose={() => setSelectedApprovedConsultation(null)}
+            onUpdated={handleApprovedConsultationUpdated}
+            onCancelled={handleApprovedConsultationCancelled}
+            onToast={(message, tone) => setToast({ message, tone })}
+          />
+        </BodyPortal>
       )}
       {toast && (
         <Toast
@@ -821,6 +825,11 @@ export function StudentConsultationWorkspace({
       )}
     </main>
   );
+}
+
+function BodyPortal({ children }: { children: ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
 }
 
 function StudentSidebar({
@@ -875,7 +884,7 @@ function StudentSidebar({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className={`absolute top-6 z-10 flex size-8 items-center justify-center rounded-full border border-[#2563eb]/30 bg-[#2563eb] text-white shadow-lg shadow-blue-900/20 transition hover:scale-105 hover:bg-[#1d4ed8] ${
+          className={`absolute top-6 z-10 flex size-8 items-center justify-center rounded-full border border-[#a51c30]/30 bg-[#a51c30] text-white shadow-lg shadow-red-900/20 transition hover:scale-105 hover:bg-[#8f1728] ${
             collapsed ? "right-[-1rem]" : "right-[-1rem]"
           }`}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -1136,7 +1145,7 @@ function SummaryCard({
     >
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <Icon className="size-7 text-[#2563eb]" />
+        <Icon className="size-7 text-[#a51c30]" />
       </div>
       <p
         className={`relative mt-5 text-3xl font-medium tracking-tight ${tone === "warning" ? "text-amber-600" : tone === "success" ? "text-emerald-600" : ""}`}
@@ -1165,7 +1174,7 @@ function UpcomingConsultationCard({
 
   if (!request) {
     return (
-      <section className="mt-6 rounded-[1.75rem] border border-dashed border-[#2563eb]/25 bg-card p-6 shadow-sm sm:p-7">
+      <section className="mt-6 rounded-[1.75rem] border border-dashed border-[#a51c30]/25 bg-card p-6 shadow-sm sm:p-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-medium text-muted-foreground">
@@ -1182,7 +1191,7 @@ function UpcomingConsultationCard({
           <button
             type="button"
             onClick={onFindTime}
-            className="inline-flex items-center justify-center rounded-full border border-[#2563eb]/25 px-5 py-3 text-sm font-medium text-muted-foreground transition hover:border-[#2563eb]/45 hover:text-[#2563eb]"
+            className="inline-flex items-center justify-center rounded-full border border-[#a51c30]/25 px-5 py-3 text-sm font-medium text-muted-foreground transition hover:border-[#a51c30]/45 hover:text-[#a51c30]"
           >
             Find a time
           </button>
@@ -1211,7 +1220,7 @@ function UpcomingConsultationCard({
     <section className="relative mt-6">
       {hasMoreMeetings && (
         <>
-          <div className="absolute inset-x-4 top-3 h-full rounded-3xl border border-[#2563eb]/10" />
+          <div className="absolute inset-x-4 top-3 h-full rounded-3xl border border-[#7ab8a6]/20" />
         </>
       )}
 
@@ -1219,7 +1228,7 @@ function UpcomingConsultationCard({
         type="button"
         key={request.id}
         onClick={() => onSelect(request)}
-        className="consultation-card-swap relative block w-full overflow-hidden rounded-[1.75rem] border border-[#60a5fa]/35 bg-gradient-to-br from-[#3b82f6] via-[#2563eb] to-[#1d4ed8] text-left text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#2563eb]/20"
+        className="consultation-card-swap relative block w-full overflow-hidden rounded-[1.75rem] border border-[#9fcdbf]/45 bg-gradient-to-br from-[#4f9b83] via-[#3f8f85] to-[#4f7f9f] text-left text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#7ab8a6]/25"
       >
         <div className="relative flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
 
@@ -1242,8 +1251,8 @@ function UpcomingConsultationCard({
           </div>
 
           <div className="relative flex shrink-0 flex-col gap-3 rounded-2xl border border-white/20 bg-white/12 p-3 backdrop-blur-sm sm:min-w-[28rem] sm:flex-row sm:items-center">
-            <div className="overflow-hidden rounded-xl bg-white text-[#2563eb] shadow-md shadow-blue-900/20">
-              <div className="bg-slate-950 px-5 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.22em] text-white">
+            <div className="overflow-hidden rounded-xl bg-white text-[#2f7564] shadow-md shadow-slate-950/15">
+              <div className="bg-[#244f48] px-5 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.22em] text-white">
                 {calendarMonth}
               </div>
               <div className="px-6 py-3 text-center text-3xl font-bold leading-none">
@@ -1289,7 +1298,7 @@ function UpcomingConsultationCard({
                 showNextMeeting();
               }
             }}
-            className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#2563eb] shadow-md shadow-blue-900/20 transition hover:-translate-y-0.5 hover:bg-white/90"
+            className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#2f7564] shadow-md shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-white/90"
           >
             Next
             <ChevronRight className="size-4" />
@@ -1342,6 +1351,7 @@ function CalendarPanel({
     startOfWeek(new Date(firstAvailabilityDate)),
   );
   const [fullView, setFullView] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
     [weekStart],
@@ -1406,6 +1416,11 @@ function CalendarPanel({
     };
   }, [fullView]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   function moveWeek(amount: number) {
     const nextWeekStart = addDays(weekStart, amount * 7);
     setWeekStart(nextWeekStart);
@@ -1429,14 +1444,14 @@ function CalendarPanel({
           <button
             type="button"
             onClick={goToToday}
-            className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
+            className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:border-[#a51c30]/40 hover:text-[#a51c30]"
           >
             Today
           </button>
           <button
             type="button"
             onClick={() => moveWeek(-1)}
-            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
+            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#a51c30]/40 hover:text-[#a51c30]"
             aria-label="Previous week"
           >
             <ChevronLeft className="size-4" />
@@ -1447,7 +1462,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={() => moveWeek(1)}
-            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
+            className="rounded-lg border border-border p-2 text-muted-foreground transition hover:border-[#a51c30]/40 hover:text-[#a51c30]"
             aria-label="Next week"
           >
             <ChevronRight className="size-4" />
@@ -1455,7 +1470,7 @@ function CalendarPanel({
           <button
             type="button"
             onClick={() => setFullView(false)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:border-[#a51c30]/40 hover:text-[#a51c30]"
             aria-label="Exit full calendar view"
           >
             <Minimize2 className="size-3.5" />
@@ -1546,9 +1561,9 @@ function CalendarPanel({
                     key={day.toISOString()}
                     className={`border-l border-border px-2 py-3 text-center transition ${
                       hasMultipleSlots
-                        ? "bg-[#2563eb]/15"
+                        ? "bg-[#a51c30]/15"
                         : isSameDay(day, new Date())
-                          ? "bg-[#2563eb]/10"
+                          ? "bg-[#a51c30]/10"
                           : ""
                     }`}
                   >
@@ -1556,7 +1571,7 @@ function CalendarPanel({
                       {day.toLocaleDateString(undefined, { weekday: "short" })}
                     </p>
                     <p
-                      className={`mt-1 text-sm font-medium ${hasMultipleSlots || isSameDay(day, new Date()) ? "text-[#2563eb]" : ""}`}
+                      className={`mt-1 text-sm font-medium ${hasMultipleSlots || isSameDay(day, new Date()) ? "text-[#a51c30]" : ""}`}
                     >
                       {day.getDate()}
                     </p>
@@ -1600,6 +1615,7 @@ function CalendarPanel({
                         key={`${slot.availability.id}-${day.toISOString()}-${slot.freeStart.toISOString()}-${slot.freeEnd.toISOString()}`}
                         day={day}
                         slot={slot}
+                        currentTimeMs={currentTime.getTime()}
                         onSelect={onSelectAvailability}
                       />
                     ))}
@@ -1610,6 +1626,9 @@ function CalendarPanel({
                         onSelect={onSelectRequest}
                       />
                     ))}
+                    {isSameDay(day, currentTime) && (
+                      <CurrentTimeLine now={currentTime} />
+                    )}
                   </div>
                 );
               })}
@@ -1621,7 +1640,7 @@ function CalendarPanel({
       {locked && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/55 px-6 backdrop-blur-[1px]">
           <div className="max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-lg">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2563eb]/10 text-[#2563eb]">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#a51c30]/10 text-[#a51c30]">
               <LockKeyhole className="size-5" />
             </div>
             <h3 className="mt-4 text-lg font-medium">
@@ -1633,7 +1652,7 @@ function CalendarPanel({
             </p>
             <Link
               href="/onboarding"
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#1d4ed8]"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#a51c30] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#8f1728]"
             >
               Go to my profile <ChevronRight className="size-4" />
             </Link>
@@ -1645,7 +1664,7 @@ function CalendarPanel({
 
   if (fullView && typeof document !== "undefined") {
     return createPortal(
-      <div className="fixed left-0 top-0 z-[9999] h-screen w-screen overflow-hidden bg-background">
+      <div className="fixed left-0 top-0 z-[90] h-screen w-screen overflow-hidden bg-background">
         {calendarSection}
       </div>,
       document.body,
@@ -1678,7 +1697,7 @@ function StudentAvailabilityEvent({
   return (
     <button
       type="button"
-      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#60a5fa]/40 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
+      className="calendar-availability absolute inset-x-1 z-10 flex flex-col justify-center overflow-hidden rounded-lg border border-[#f5b800]/40 px-2 py-1.5 text-left text-xs text-white shadow-sm transition"
       style={{ top, height }}
       title={format}
     >
@@ -1704,13 +1723,34 @@ function StudentAvailabilityEvent({
   );
 }
 
+function CurrentTimeLine({ now }: { now: Date }) {
+  const hour = now.getHours() + now.getMinutes() / 60;
+
+  if (hour < 7 || hour > 21) return null;
+
+  const top = (hour - 7) * 64;
+
+  return (
+    <div
+      className="pointer-events-none absolute left-0 right-0 z-40"
+      style={{ top }}
+      aria-hidden="true"
+    >
+      <span className="absolute -left-1 top-1/2 size-2.5 -translate-y-1/2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.18)]" />
+      <span className="block h-[2px] bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.45)]" />
+    </div>
+  );
+}
+
 function StudentRequestableSlot({
   day,
   slot,
+  currentTimeMs,
   onSelect,
 }: {
   day: Date;
   slot: RequestableSlot;
+  currentTimeMs: number;
   onSelect: (selection: SelectedAvailability) => void;
 }) {
   const format = consultationModeLabel(slot.availability.consultation_mode);
@@ -1718,13 +1758,16 @@ function StudentRequestableSlot({
   const colors = instructorScheduleColor(slot.availability);
   const freeStart = slot.freeStart;
   const freeEnd = slot.freeEnd;
+  const isPast = freeEnd.getTime() <= currentTimeMs;
   const startHour = Math.max(
     7,
     freeStart.getHours() + freeStart.getMinutes() / 60,
   );
   const endHour = Math.min(21, freeEnd.getHours() + freeEnd.getMinutes() / 60);
-  const top = (startHour - 7) * 64;
-  const height = Math.max(34, (endHour - startHour) * 64);
+  const rawHeight = Math.max(0, (endHour - startHour) * 64);
+  const top = (startHour - 7) * 64 + 2;
+  const height = Math.max(30, rawHeight - 4);
+  const compact = height < 58;
   const gap = 4;
   const laneWidth = 100 / slot.laneCount;
   const width =
@@ -1739,7 +1782,10 @@ function StudentRequestableSlot({
   return (
     <button
       type="button"
-      onClick={() =>
+      disabled={isPast}
+      onClick={() => {
+        if (isPast) return;
+
         onSelect({
           day: localDateKey(day),
           freeStart: freeStart.toISOString(),
@@ -1751,9 +1797,15 @@ function StudentRequestableSlot({
               freeEnd: slot.freeEnd.toISOString(),
             },
           ],
-        })
-      }
-      className="absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border px-3 py-2 text-left text-xs leading-tight text-white shadow-sm transition hover:brightness-95"
+        });
+      }}
+      className={`absolute z-10 flex flex-col justify-center overflow-hidden rounded-lg border text-left text-white shadow-sm transition ${
+        isPast
+          ? "cursor-not-allowed grayscale opacity-45 saturate-0"
+          : "hover:brightness-95"
+      } ${
+        compact ? "px-2 py-0.5 text-[9px] leading-[1.05]" : "px-3 py-2 text-xs leading-tight"
+      }`}
       style={{
         top,
         height,
@@ -1763,21 +1815,27 @@ function StudentRequestableSlot({
         borderColor: colors.border,
         boxShadow: `0 12px 24px -18px ${colors.shadow}`,
       }}
-      title={`${format} with ${professor}`}
+      title={
+        isPast
+          ? `Past availability: ${format} with ${professor}`
+          : `${format} with ${professor}`
+      }
     >
-      <span className="flex items-center gap-1 whitespace-normal break-words font-semibold">
+      <span className="flex items-center gap-1 truncate font-semibold">
         <ConsultationModeIcon
           mode={slot.availability.consultation_mode}
           className="size-3"
         />
         {format}
       </span>
-      <span className="block whitespace-normal break-words">
+      <span className="block truncate font-medium">
         {timeLabel(freeStart)} - {timeLabel(freeEnd)}
       </span>
-      <span className="mt-1 block whitespace-normal break-words text-[11px] text-white/85">
-        {professor}
-      </span>
+      {!compact && (
+        <span className="mt-1 block whitespace-normal break-words text-[11px] text-white/85">
+          {professor}
+        </span>
+      )}
     </button>
   );
 }
@@ -1792,8 +1850,9 @@ function StudentCalendarRequestSlot({
   const { request, start, end } = slot;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
-  const top = (startHour - 7) * 64;
-  const timeHeight = Math.max(34, (endHour - startHour) * 64);
+  const rawHeight = Math.max(0, (endHour - startHour) * 64);
+  const top = (startHour - 7) * 64 + 2;
+  const height = Math.max(30, rawHeight - 4);
   const gap = 4;
   const laneWidth = 100 / slot.laneCount;
   const width = `calc(${laneWidth}% - ${gap}px)`;
@@ -1804,20 +1863,15 @@ function StudentCalendarRequestSlot({
   const timeRange = `${timeLabel(start)} - ${timeLabel(end)}`;
   const status = request.status === "approved" ? "Approved" : "Pending";
   const isApproved = request.status === "approved";
-  const height = readableCalendarBlockHeight(
-    timeHeight,
-    [status, format, timeRange, request.concern_type],
-    slot.laneCount,
-  );
-  const compact = height < 68;
-  const roomy = height >= 92;
+  const compact = height < 58;
+  const roomy = height >= 82;
 
   return (
     <div
-      className={`absolute z-30 overflow-hidden rounded-lg border text-left shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-4 focus-within:ring-[#2563eb]/20 ${
+      className={`absolute z-30 overflow-hidden rounded-lg border text-left shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-4 focus-within:ring-[#a51c30]/20 ${
         isApproved
-          ? "border-emerald-300/80 bg-emerald-500/90 text-white dark:border-emerald-300/60 dark:bg-emerald-400/80 dark:text-emerald-950"
-          : "border-amber-300/80 bg-amber-300/90 text-amber-950 dark:border-amber-300/60 dark:bg-amber-400/80"
+          ? "border-[#9fcdbf]/80 bg-[#4f9b83]/90 text-white dark:border-[#9fcdbf]/60 dark:bg-[#5fae99]/85 dark:text-white"
+          : "border-[#d9c08a]/80 bg-[#d6b66a]/88 text-[#332712] dark:border-[#d9c08a]/60 dark:bg-[#caa85d]/85 dark:text-[#241b0e]"
       }`}
       style={{ top, height, left, width }}
       title={`${status} consultation details`}
@@ -1827,45 +1881,43 @@ function StudentCalendarRequestSlot({
         onClick={() => onSelect(request)}
         className={`flex h-full w-full text-left focus:outline-none ${
           compact
-            ? "items-center gap-1.5 px-2 pb-1 pt-7 text-[10px]"
+            ? "flex-col justify-center px-2 py-0.5 text-[9px] leading-[1.05]"
             : `flex-col justify-center px-3 pb-2 pt-9 text-xs`
         }`}
       >
+        {!compact && (
+          <span
+            className={`absolute left-2 top-2 inline-flex w-fit items-center rounded-full font-bold uppercase shadow-sm ${
+              isApproved
+                ? "bg-white/24 text-white dark:bg-white/22 dark:text-white"
+                : "bg-white/68 text-[#4a3715] dark:bg-white/55 dark:text-[#332712]"
+            } px-2 py-0.5 text-[10px] tracking-[0.12em]`}
+          >
+            {status}
+          </span>
+        )}
         <span
-          className={`absolute left-2 top-2 inline-flex w-fit items-center rounded-full font-bold uppercase shadow-sm ${
-            isApproved
-              ? "bg-white/25 text-white dark:bg-emerald-100/80 dark:text-emerald-950"
-              : "bg-white/70 text-amber-900 dark:bg-amber-100/80 dark:text-amber-950"
-          } ${
-            compact
-              ? "px-1.5 py-0.5 text-[8px] tracking-[0.08em]"
-              : "px-2 py-0.5 text-[10px] tracking-[0.12em]"
-          }`}
+          className={`${compact ? "block truncate uppercase tracking-[0.08em]" : "mt-2 block"} font-semibold leading-tight`}
         >
-          {status}
-        </span>
-        <span
-          className={`${compact ? "min-w-0 truncate" : "mt-2 block"} font-semibold leading-tight`}
-        >
-          {request.availability?.consultation_mode && (
+          {!compact && request.availability?.consultation_mode && (
             <ConsultationModeIcon
               mode={request.availability.consultation_mode}
               className="size-3"
             />
           )}
-          {format}
+          {compact ? status : format}
         </span>
         <span
-          className={`${compact ? "shrink-0" : "mt-1 block"} font-medium leading-tight`}
+          className={`${compact ? "block truncate" : "mt-1 block"} font-medium leading-tight`}
         >
-          {timeRange}
+          {compact ? `${format} · ${timeRange}` : timeRange}
         </span>
         {roomy && (
           <span
             className={`mt-1 block whitespace-normal break-words text-[11px] leading-tight capitalize ${
               isApproved
-                ? "text-white/85 dark:text-emerald-950/80"
-                : "text-amber-900/85 dark:text-amber-950/80"
+                ? "text-white/85 dark:text-white/82"
+                : "text-[#4a3715]/85 dark:text-[#332712]/85"
             }`}
           >
             {request.concern_type}
@@ -1961,7 +2013,7 @@ function RequestConsultationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <form
         onSubmit={submit}
         className="flex h-[min(90vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl"
@@ -2016,8 +2068,8 @@ function RequestConsultationModal({
                     }}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       selected
-                        ? "border-[#2563eb] bg-[#2563eb]/10 text-foreground shadow-sm"
-                        : "border-border bg-background hover:border-[#2563eb]/40"
+                        ? "border-[#a51c30] bg-[#a51c30]/10 text-foreground shadow-sm"
+                        : "border-border bg-background hover:border-[#a51c30]/40"
                     }`}
                   >
                     <span className="block text-sm font-semibold">
@@ -2105,7 +2157,7 @@ function RequestConsultationModal({
                 type="button"
                 key={value}
                 onClick={() => setConcernType(value)}
-                className={`rounded-xl border px-4 py-3 text-left text-sm transition ${concernType === value ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-border bg-background hover:border-[#2563eb]/40"}`}
+                className={`rounded-xl border px-4 py-3 text-left text-sm transition ${concernType === value ? "border-[#a51c30] bg-[#a51c30] text-white" : "border-border bg-background hover:border-[#a51c30]/40"}`}
               >
                 {label}
               </button>
@@ -2135,7 +2187,7 @@ function RequestConsultationModal({
           </button>
           <button
             disabled={saving || !selectedStart || !selectedEnd}
-            className="inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-[#a51c30] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#8f1728] disabled:opacity-60"
           >
             {saving ? "Sending..." : "Send request"}
             <Send className="size-4" />
@@ -2312,21 +2364,12 @@ function layoutStudentCalendarDay({
     ...requests.map((request) => {
       const start = new Date(request.requested_start_datetime);
       const end = new Date(request.requested_end_datetime);
-      const status = request.status === "approved" ? "Approved" : "Pending";
-      const format = request.availability?.consultation_mode
-        ? consultationModeLabel(request.availability.consultation_mode)
-        : "Consultation";
 
       return {
         type: "request" as const,
         start,
         end,
-        visualEnd: visualEndTimeForCalendarBlock(start, end, [
-          status,
-          format,
-          `${timeLabel(start)} - ${timeLabel(end)}`,
-          request.concern_type,
-        ]),
+        visualEnd: end.getTime(),
         request,
         lane: 0,
         laneCount: 1,
@@ -2511,9 +2554,9 @@ function studentInitials(displayName: string, email: string) {
 function instructorScheduleColor(availability: Availability) {
   const palette = [
     {
-      background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+      background: "linear-gradient(135deg, #5277b8, #6f9cc9)",
       border: "rgba(191, 219, 254, 0.72)",
-      shadow: "#2563eb",
+      shadow: "#5277b8",
     },
     {
       background: "linear-gradient(135deg, #0284c7, #38bdf8)",
@@ -2521,9 +2564,9 @@ function instructorScheduleColor(availability: Availability) {
       shadow: "#0284c7",
     },
     {
-      background: "linear-gradient(135deg, #1d4ed8, #60a5fa)",
+      background: "linear-gradient(135deg, #8f1728, #f5b800)",
       border: "rgba(191, 219, 254, 0.72)",
-      shadow: "#1d4ed8",
+      shadow: "#8f1728",
     },
     {
       background: "linear-gradient(135deg, #7c3aed, #8b5cf6)",
@@ -2610,13 +2653,13 @@ function ProfileStatusPanel({ complete }: { complete: boolean }) {
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-border">
           <div
-            className={`h-full rounded-full bg-[#2563eb] transition-all ${complete ? "w-full" : "w-1/2"}`}
+            className={`h-full rounded-full bg-[#a51c30] transition-all ${complete ? "w-full" : "w-1/2"}`}
           />
         </div>
       </div>
       <Link
         href="/onboarding"
-        className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-[#2563eb] hover:underline"
+        className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-[#a51c30] hover:underline"
       >
         {complete ? "Update my profile" : "Complete my profile"}{" "}
         <ChevronRight className="size-4" />
@@ -2624,5 +2667,6 @@ function ProfileStatusPanel({ complete }: { complete: boolean }) {
     </section>
   );
 }
+
 
 

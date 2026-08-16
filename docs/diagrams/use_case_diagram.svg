@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/><stop offset="100%" stop-color="#e7f0ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1d4ed8" flood-opacity=".13"/>
+    </filter>
+    <style>
+      .title{font:700 42px Arial,sans-serif;fill:#0f172a}
+      .sub{font:400 19px Arial,sans-serif;fill:#475569}
+      .actor{fill:#1d4ed8}
+      .actorText{font:700 22px Arial,sans-serif;fill:#0f172a;text-anchor:middle}
+      .sys{fill:#fff;stroke:#bfdbfe;stroke-width:2;filter:url(#shadow)}
+      .uc{fill:#eff6ff;stroke:#60a5fa;stroke-width:2}
+      .uct{font:600 17px Arial,sans-serif;fill:#172554;text-anchor:middle}
+      .line{stroke:#64748b;stroke-width:2;fill:none}
+      .rel{stroke:#2563eb;stroke-width:2.5;fill:none;stroke-dasharray:8 7}
+    </style>
+  </defs>
+  <rect width="1500" height="980" fill="url(#bg)"/>
+  <text x="70" y="78" class="title">Use Case Diagram</text>
+  <text x="72" y="112" class="sub">Main actions performed by students, instructors, and the system administrator.</text>
+  <rect class="sys" x="290" y="155" width="920" height="745" rx="34"/>
+  <text x="750" y="200" class="sub" text-anchor="middle">Student Consultation Scheduler</text>
+
+  <g transform="translate(120,275)">
+    <circle class="actor" cx="50" cy="35" r="28"/><path d="M50 65v80M12 95h76M50 145l-38 60M50 145l38 60" stroke="#1d4ed8" stroke-width="10" stroke-linecap="round"/>
+    <text x="50" y="245" class="actorText">Student</text>
+  </g>
+  <g transform="translate(1290,295)">
+    <circle class="actor" cx="50" cy="35" r="28"/><path d="M50 65v80M12 95h76M50 145l-38 60M50 145l38 60" stroke="#1d4ed8" stroke-width="10" stroke-linecap="round"/>
+    <text x="50" y="245" class="actorText">Instructor</text>
+  </g>
+  <g transform="translate(700,760)">
+    <circle class="actor" cx="50" cy="35" r="28"/><path d="M50 65v80M12 95h76M50 145l-38 60M50 145l38 60" stroke="#1d4ed8" stroke-width="10" stroke-linecap="round"/>
+    <text x="50" y="245" class="actorText">Admin</text>
+  </g>
+
+  <ellipse class="uc" cx="505" cy="270" rx="150" ry="42"/><text class="uct" x="505" y="276">Sign in using Microsoft</text>
+  <ellipse class="uc" cx="505" cy="370" rx="150" ry="42"/><text class="uct" x="505" y="376">Complete profile</text>
+  <ellipse class="uc" cx="505" cy="470" rx="165" ry="42"/><text class="uct" x="505" y="466">View availability</text><text class="uct" x="505" y="488">and request schedule</text>
+  <ellipse class="uc" cx="505" cy="570" rx="165" ry="42"/><text class="uct" x="505" y="566">Track pending, approved,</text><text class="uct" x="505" y="588">declined, cancelled</text>
+  <ellipse class="uc" cx="505" cy="670" rx="150" ry="42"/><text class="uct" x="505" y="676">Download calendar invite</text>
+
+  <ellipse class="uc" cx="995" cy="300" rx="170" ry="42"/><text class="uct" x="995" y="296">Create, edit, or delete</text><text class="uct" x="995" y="318">availability windows</text>
+  <ellipse class="uc" cx="995" cy="420" rx="170" ry="42"/><text class="uct" x="995" y="416">Review consultation</text><text class="uct" x="995" y="438">requests</text>
+  <ellipse class="uc" cx="995" cy="540" rx="170" ry="42"/><text class="uct" x="995" y="536">Approve or decline</text><text class="uct" x="995" y="558">requests</text>
+  <ellipse class="uc" cx="995" cy="660" rx="170" ry="42"/><text class="uct" x="995" y="656">View confirmed</text><text class="uct" x="995" y="678">consultations</text>
+
+  <ellipse class="uc" cx="750" cy="750" rx="178" ry="42"/><text class="uct" x="750" y="746">Manage auth settings</text><text class="uct" x="750" y="768">and database policies</text>
+
+  <path class="line" d="M235 400 C315 340 350 285 355 275"/>
+  <path class="line" d="M235 420 C330 410 350 390 355 376"/>
+  <path class="line" d="M235 440 C330 465 350 468 340 470"/>
+  <path class="line" d="M235 465 C330 555 360 560 340 570"/>
+  <path class="line" d="M235 490 C330 645 360 660 355 670"/>
+
+  <path class="line" d="M1290 420 C1210 360 1180 320 1162 304"/>
+  <path class="line" d="M1290 435 C1210 430 1185 425 1165 420"/>
+  <path class="line" d="M1290 455 C1210 505 1185 525 1162 540"/>
+  <path class="line" d="M1290 480 C1210 625 1185 645 1162 660"/>
+
+  <path class="line" d="M750 760 L750 792"/>
+  <path class="rel" d="M660 470 C735 465 805 440 830 425"/>
+  <path class="rel" d="M830 540 C735 575 670 575 665 570"/>
+  <path class="rel" d="M995 583 C995 610 995 625 995 618"/>
+</svg>

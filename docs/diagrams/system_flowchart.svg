@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1250" viewBox="0 0 1700 1250">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="100%" stop-color="#e5efff"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0" x2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1d4ed8" flood-opacity=".12"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .title{font:700 42px Arial,sans-serif;fill:#0f172a}
+      .subtitle{font:400 18px Arial,sans-serif;fill:#475569}
+      .lane{fill:#ffffff;stroke:#bfdbfe;stroke-width:2}
+      .laneHead{fill:#dbeafe;stroke:#bfdbfe;stroke-width:2}
+      .laneText{font:700 18px Arial,sans-serif;fill:#1e3a8a;text-anchor:middle}
+      .start{fill:url(#primary);stroke:#1d4ed8;stroke-width:2;filter:url(#shadow)}
+      .step{fill:#ffffff;stroke:#93c5fd;stroke-width:2;filter:url(#shadow)}
+      .decision{fill:#eff6ff;stroke:#2563eb;stroke-width:2;filter:url(#shadow)}
+      .success{fill:#ecfdf5;stroke:#10b981;stroke-width:2;filter:url(#shadow)}
+      .text{font:700 17px Arial,sans-serif;fill:#0f172a;text-anchor:middle}
+      .small{font:500 14px Arial,sans-serif;fill:#475569;text-anchor:middle}
+      .white{font:700 17px Arial,sans-serif;fill:#ffffff;text-anchor:middle}
+      .line{stroke:#2563eb;stroke-width:3;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#2563eb;stroke-width:3;fill:none;stroke-dasharray:8 8;marker-end:url(#arrow)}
+      .label{font:700 13px Arial,sans-serif;fill:#1d4ed8}
+    </style>
+  </defs>
+
+  <rect width="1700" height="1250" fill="url(#bg)"/>
+  <text x="70" y="76" class="title">System Flowchart</text>
+  <text x="72" y="110" class="subtitle">Clean process flow for authentication, student booking, instructor approval, and realtime updates.</text>
+
+  <!-- Lanes -->
+  <g transform="translate(70,155)">
+    <rect class="lane" x="0" y="0" width="1560" height="1015" rx="26"/>
+    <rect class="laneHead" x="0" y="0" width="1560" height="55" rx="26"/>
+    <line x1="390" y1="0" x2="390" y2="1015" stroke="#bfdbfe" stroke-width="2"/>
+    <line x1="780" y1="0" x2="780" y2="1015" stroke="#bfdbfe" stroke-width="2"/>
+    <line x1="1170" y1="0" x2="1170" y2="1015" stroke="#bfdbfe" stroke-width="2"/>
+    <text x="195" y="36" class="laneText">User / Authentication</text>
+    <text x="585" y="36" class="laneText">Student</text>
+    <text x="975" y="36" class="laneText">Instructor</text>
+    <text x="1365" y="36" class="laneText">System / Database</text>
+  </g>
+
+  <!-- Authentication -->
+  <rect class="start" x="145" y="240" width="250" height="66" rx="33"/>
+  <text x="270" y="279" class="white">Open application</text>
+  <path class="line" d="M270 306 V350"/>
+
+  <rect class="step" x="135" y="350" width="270" height="70" rx="18"/>
+  <text x="270" y="379" class="text">Sign in using Microsoft</text>
+  <text x="270" y="403" class="small">Institutional account</text>
+  <path class="line" d="M270 420 V475"/>
+
+  <path class="decision" d="M270 475 L405 535 L270 595 L135 535 Z"/>
+  <text x="270" y="531" class="text">Authenticated?</text>
+  <text x="270" y="555" class="small">Valid session</text>
+  <path class="line" d="M135 535 H90 V385 H135"/>
+  <text x="92" y="520" class="label">No - retry</text>
+
+  <!-- Role routing -->
+  <path class="line" d="M405 535 H665"/>
+  <text x="430" y="520" class="label">Yes</text>
+  <path class="decision" d="M800 475 L935 535 L800 595 L665 535 Z"/>
+  <text x="800" y="531" class="text">Identify role</text>
+  <text x="800" y="555" class="small">Student or Instructor</text>
+
+  <path class="line" d="M750 585 L615 670"/>
+  <text x="640" y="625" class="label">Student</text>
+  <rect class="step" x="480" y="670" width="270" height="75" rx="18"/>
+  <text x="615" y="700" class="text">Open Student Dashboard</text>
+  <text x="615" y="725" class="small">Stats, calendar, history</text>
+
+  <path class="line" d="M850 585 L975 670"/>
+  <text x="928" y="625" class="label">Instructor</text>
+  <rect class="step" x="840" y="670" width="270" height="75" rx="18"/>
+  <text x="975" y="700" class="text">Open Instructor Dashboard</text>
+  <text x="975" y="725" class="small">Calendar and requests</text>
+
+  <!-- Student flow -->
+  <path class="line" d="M615 745 V790"/>
+  <path class="decision" d="M615 790 L750 850 L615 910 L480 850 Z"/>
+  <text x="615" y="846" class="text">Profile complete?</text>
+  <text x="615" y="870" class="small">Program and section</text>
+
+  <path class="line" d="M480 850 H420 V970 H480"/>
+  <text x="433" y="834" class="label">No</text>
+  <rect class="step" x="480" y="945" width="270" height="75" rx="18"/>
+  <text x="615" y="975" class="text">Complete profile</text>
+  <text x="615" y="1000" class="small">Required student details</text>
+
+  <path class="line" d="M615 910 V945"/>
+  <text x="635" y="930" class="label">Yes</text>
+  <path class="line" d="M750 982 H1230"/>
+
+  <rect class="step" x="1230" y="945" width="270" height="75" rx="18"/>
+  <text x="1365" y="975" class="text">Load matching windows</text>
+  <text x="1365" y="1000" class="small">Filtered by program scope</text>
+  <path class="line" d="M1230 982 H750"/>
+
+  <rect class="step" x="480" y="1065" width="270" height="75" rx="18"/>
+  <text x="615" y="1095" class="text">Request schedule</text>
+  <text x="615" y="1120" class="small">Preferred time and concern</text>
+  <path class="line" d="M615 1020 V1065"/>
+  <path class="line" d="M750 1102 H1230"/>
+
+  <rect class="step" x="1230" y="1065" width="270" height="75" rx="18"/>
+  <text x="1365" y="1095" class="text">Save request</text>
+  <text x="1365" y="1120" class="small">Status becomes Pending</text>
+
+  <!-- Instructor flow -->
+  <path class="line" d="M975 745 V790"/>
+  <rect class="step" x="840" y="790" width="270" height="75" rx="18"/>
+  <text x="975" y="820" class="text">Create availability</text>
+  <text x="975" y="845" class="small">Date, time, format, program</text>
+  <path class="line" d="M1110 827 H1230"/>
+
+  <rect class="step" x="1230" y="790" width="270" height="75" rx="18"/>
+  <text x="1365" y="820" class="text">Publish availability</text>
+  <text x="1365" y="845" class="small">Realtime to matching students</text>
+
+  <path class="dash" d="M1230 1102 H1110"/>
+  <rect class="step" x="840" y="1065" width="270" height="75" rx="18"/>
+  <text x="975" y="1095" class="text">Review request</text>
+  <text x="975" y="1120" class="small">Approve or decline</text>
+
+  <path class="line" d="M975 1140 V1180 H1170"/>
+  <rect class="success" x="1170" y="1150" width="330" height="65" rx="18"/>
+  <text x="1335" y="1177" class="text">Update calendars</text>
+  <text x="1335" y="1200" class="small">Notify both users realtime</text>
+</svg>
