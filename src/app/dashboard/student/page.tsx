@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { StudentConsultationWorkspace } from "@/components/dashboard/StudentConsultationWorkspace";
 
@@ -21,7 +21,7 @@ export default async function StudentDashboardPage() {
   const displayName = microsoftName ?? identityName ?? storedName ?? emailUsername;
   const { data: availabilityData } = await supabase
     .from("instructor_availability")
-    .select("id, instructor_id, instructor_display_name, start_datetime, end_datetime, consultation_mode, availability_programs(program), instructor:profiles!instructor_availability_instructor_id_fkey(full_name, email)")
+    .select("id, instructor_id, instructor_display_name, start_datetime, end_datetime, consultation_mode, meeting_platform, meeting_url, venue, availability_programs(program), instructor:profiles!instructor_availability_instructor_id_fkey(full_name, email)")
     .eq("is_active", true)
     .order("start_datetime", { ascending: true });
 
@@ -32,6 +32,9 @@ export default async function StudentDashboardPage() {
     start_datetime: string;
     end_datetime: string;
     consultation_mode: "f2f" | "online" | "both";
+    meeting_platform?: "none" | "other" | null;
+    meeting_url?: string | null;
+    venue?: string | null;
     availability_programs?: { program: string }[];
     instructor?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
   }>;
@@ -42,7 +45,7 @@ export default async function StudentDashboardPage() {
 
   const { data: requestData } = await supabase
     .from("consultation_requests")
-    .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)")
+    .select("id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_platform, meeting_url, venue)")
     .eq("student_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -60,7 +63,7 @@ export default async function StudentDashboardPage() {
     microsoft_calendar_event_id: string | null;
     microsoft_calendar_synced_at: string | null;
     instructor?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
-    availability?: { consultation_mode: "f2f" | "online" | "both" }[] | { consultation_mode: "f2f" | "online" | "both" } | null;
+    availability?: { consultation_mode: "f2f" | "online" | "both"; meeting_platform?: "none" | "other" | null; meeting_url?: string | null; venue?: string | null }[] | { consultation_mode: "f2f" | "online" | "both"; meeting_platform?: "none" | "other" | null; meeting_url?: string | null; venue?: string | null } | null;
   }>;
   const requests = requestRows.map((request) => ({
     ...request,
@@ -104,3 +107,4 @@ export default async function StudentDashboardPage() {
     />
   );
 }
+

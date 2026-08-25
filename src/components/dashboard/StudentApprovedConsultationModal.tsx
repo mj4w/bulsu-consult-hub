@@ -5,6 +5,8 @@ import {
   CalendarDays,
   Clock,
   Edit3,
+  ExternalLink,
+  Link2,
   Mail,
   MapPin,
   MessageSquare,
@@ -17,6 +19,7 @@ import { useMemo, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { downloadConsultationInvite } from "@/lib/calendar/ics";
+import { notifyConsultationEmail } from "@/lib/email/client-notifications";
 
 type ConsultationMode = "f2f" | "online" | "both";
 type ConcernType = "research" | "grades" | "projects" | "others";
@@ -45,6 +48,9 @@ export type ApprovedConsultation = {
   } | null;
   availability?: {
     consultation_mode: ConsultationMode;
+    meeting_platform?: "none" | "other" | null;
+    meeting_url?: string | null;
+    venue?: string | null;
   } | null;
 };
 
@@ -87,7 +93,10 @@ const consultationRequestSelect = `
     email
   ),
   availability:instructor_availability!consultation_requests_availability_id_fkey(
-    consultation_mode
+    consultation_mode,
+    meeting_platform,
+    meeting_url,
+    venue
   )
 `;
 
@@ -303,6 +312,7 @@ export function StudentApprovedConsultationModal({
 
     onCancelled(request.id);
     onToast("Pending request cancelled.", "success");
+    void notifyConsultationEmail(request.id, "student_cancelled_approved");
     onClose();
   }
 
@@ -348,6 +358,7 @@ export function StudentApprovedConsultationModal({
 
     onCancelled(request.id);
     onToast("Consultation cancelled.", "success");
+    void notifyConsultationEmail(request.id, "student_cancelled_approved");
     onClose();
   }
 
@@ -369,6 +380,8 @@ export function StudentApprovedConsultationModal({
       message: request.message,
       start: request.requested_start_datetime,
       end: request.requested_end_datetime,
+      meetingUrl,
+      venue: request.availability?.venue,
     });
 
     onToast("Calendar invite downloaded.", "success");
@@ -378,6 +391,18 @@ export function StudentApprovedConsultationModal({
     request.instructor?.full_name?.trim() ||
     request.instructor?.email?.split("@")[0] ||
     "Instructor";
+  const meetingUrl =
+    request.status === "approved" &&
+    request.availability?.consultation_mode !== "f2f" &&
+    request.availability?.meeting_url
+      ? request.availability.meeting_url
+      : null;
+  const venue =
+    request.status === "approved" &&
+    request.availability?.consultation_mode !== "online" &&
+    request.availability?.venue
+      ? request.availability.venue
+      : null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3 backdrop-blur-[2px]">
@@ -472,6 +497,56 @@ export function StudentApprovedConsultationModal({
               value={concernLabel(request.concern_type)}
             />
           </div>
+
+          {meetingUrl && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                    <MeetingPlatformIcon
+                      platform={
+                        request.availability?.meeting_platform ?? "other"
+                      }
+                      className="size-4"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Online meeting link
+                    </p>
+                    <p className="mt-1 break-all text-sm leading-6 text-muted-foreground">
+                      {meetingUrl}
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={meetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Open link
+                  <ExternalLink className="size-4" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {venue && (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white">
+                  <MapPin className="size-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">F2F location</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {venue}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {editing ? (
             <div className="space-y-4 rounded-2xl border border-border bg-background/70 p-4">
@@ -642,33 +717,39 @@ export function StudentApprovedConsultationModal({
           {isApproved && (
             <>
               {!isPastApproved && (
-              <div className="rounded-2xl border border-[#2563eb]/20 bg-[#2563eb]/8 p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
-                        <CalendarCheck2 className="size-4" />
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-[#2563eb]/20 bg-[#2563eb]/8 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
+                          <CalendarCheck2 className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold">
+                            Calendar invite
+                          </p>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                            Download an .ics invite and open it with Outlook,
+                            Microsoft Calendar, Google Calendar, or Apple Calendar.
+                          </p>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            Direct Outlook sync requires university admin approval,
+                            so the invite file is the supported option for now.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold">
-                          Calendar invite
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Download an .ics invite and open it with Outlook,
-                          Microsoft Calendar, Google Calendar, or Apple Calendar.
-                        </p>
-                      </div>
-                    </div>
 
-                    <button
-                      type="button"
-                      onClick={downloadCalendarInvite}
-                      className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
-                    >
-                      <span className="flex size-6 items-center justify-center rounded-full bg-white/15 text-white transition group-hover:scale-105">
-                        <CalendarCheck2 className="size-4" />
-                      </span>
-                      Download invite
-                    </button>
+                      <button
+                        type="button"
+                        onClick={downloadCalendarInvite}
+                        className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
+                      >
+                        <span className="flex size-6 items-center justify-center rounded-full bg-white/15 text-white transition group-hover:scale-105">
+                          <CalendarCheck2 className="size-4" />
+                        </span>
+                        Download invite
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -785,6 +866,15 @@ function modeIcon(mode?: ConsultationMode | null) {
   return SquareSplitHorizontal;
 }
 
+function MeetingPlatformIcon({
+  className = "size-4",
+}: {
+  platform: NonNullable<NonNullable<ApprovedConsultation["availability"]>["meeting_platform"]>;
+  className?: string;
+}) {
+  return <Link2 className={className} />;
+}
+
 function normalizeRequest(
   request: ApprovedConsultationRow,
 ): ApprovedConsultation {
@@ -798,3 +888,4 @@ function normalizeRequest(
       : request.availability ?? null,
   };
 }
+

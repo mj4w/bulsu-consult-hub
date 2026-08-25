@@ -143,7 +143,10 @@ export function StudentHistoryPanel({
   }, []);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+    <section
+      data-tour="student-history-overview"
+      className="overflow-hidden rounded-2xl border border-border bg-card"
+    >
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-muted/20 px-4 py-5 sm:flex-row sm:items-start sm:px-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
@@ -162,7 +165,10 @@ export function StudentHistoryPanel({
         </div>
       </div>
 
-      <div className="border-b border-border px-4 py-4 sm:px-6">
+      <div
+        data-tour="student-history-search"
+        className="border-b border-border px-4 py-4 sm:px-6"
+      >
         <label className="relative block">
           <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -180,7 +186,10 @@ export function StudentHistoryPanel({
       {requests.length ? (
         filteredRequests.length ? (
           <>
-            <div className="relative px-4 py-4 sm:px-6">
+            <div
+              data-tour="student-history-list"
+              className="relative px-4 py-4 sm:px-6"
+            >
               <div className="absolute bottom-6 left-[2.15rem] top-6 hidden w-px bg-border sm:block" />
               <div className="space-y-3">
                 {currentRequests.map((request) => (

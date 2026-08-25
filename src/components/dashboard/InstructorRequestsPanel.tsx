@@ -14,6 +14,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
+import { notifyConsultationEmail } from "@/lib/email/client-notifications";
 
 export type InstructorRequest = {
   id: string;
@@ -147,6 +148,7 @@ export function InstructorRequestsPanel({
     const autoDeclinedNote = "Another student was accepted for an overlapping time slot.";
 
     setUpdatingId(requestId);
+    let autoDeclinedRequestIds: string[] = [];
 
     const { data: updatedRequest, error } = await supabase
       .from("consultation_requests")
@@ -175,7 +177,7 @@ export function InstructorRequestsPanel({
     }
 
     if (status === "approved") {
-      const { error: declineError } = await supabase
+      const { data: autoDeclinedRequests, error: declineError } = await supabase
         .from("consultation_requests")
         .update({
           status: "declined",
@@ -185,7 +187,8 @@ export function InstructorRequestsPanel({
         .lt("requested_start_datetime", selectedRequest.requested_end_datetime)
         .gt("requested_end_datetime", selectedRequest.requested_start_datetime)
         .eq("status", "pending")
-        .neq("id", requestId);
+        .neq("id", requestId)
+        .select("id");
 
       if (declineError) {
         setToast({
@@ -195,6 +198,10 @@ export function InstructorRequestsPanel({
         setUpdatingId(null);
         return;
       }
+
+      autoDeclinedRequestIds = ((autoDeclinedRequests ?? []) as Array<{ id: string }>).map(
+        (request) => request.id,
+      );
     }
 
     setRequests((current) =>
@@ -232,6 +239,13 @@ export function InstructorRequestsPanel({
           : "Consultation request declined.",
       tone: "success",
     });
+    void notifyConsultationEmail(
+      requestId,
+      status === "approved" ? "request_approved" : "request_declined",
+    );
+    autoDeclinedRequestIds.forEach((autoDeclinedRequestId) => {
+      void notifyConsultationEmail(autoDeclinedRequestId, "request_declined");
+    });
     setUpdatingId(null);
   }
 
@@ -258,7 +272,10 @@ export function InstructorRequestsPanel({
   const paginatedReviewed = reviewed.slice((safeReviewedPage - 1) * pageSize, safeReviewedPage * pageSize);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div
+      data-tour="instructor-requests-overview"
+      className="overflow-hidden rounded-2xl border border-border bg-card"
+    >
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-muted/20 px-4 py-5 sm:flex-row sm:items-start sm:px-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
@@ -277,13 +294,19 @@ export function InstructorRequestsPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 border-b border-border px-4 py-4 sm:grid-cols-3 sm:px-6">
+      <div
+        data-tour="instructor-requests-metrics"
+        className="grid gap-3 border-b border-border px-4 py-4 sm:grid-cols-3 sm:px-6"
+      >
         <RequestMetric label="Pending review" value={pending.length} tone="primary" />
         <RequestMetric label="Approved" value={approvedCount} tone="success" />
         <RequestMetric label="Declined" value={declinedCount} tone="muted" />
       </div>
 
-      <div className="border-b border-border px-4 py-4 sm:px-6">
+      <div
+        data-tour="instructor-requests-search"
+        className="border-b border-border px-4 py-4 sm:px-6"
+      >
         <label className="relative block">
           <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -302,6 +325,7 @@ export function InstructorRequestsPanel({
       {requests.length ? (
         <div className="space-y-5 p-4 sm:p-6">
           <RequestSection
+            tourId="instructor-pending-requests"
             title="Pending review"
             description="Start here. These requests need your approval or decline."
             count={pending.length}
@@ -325,6 +349,7 @@ export function InstructorRequestsPanel({
             ))}
           </RequestSection>
           <RequestSection
+            tourId="instructor-reviewed-requests"
             title="Reviewed requests"
             description="Already approved, declined, or cancelled."
             count={reviewed.length}
@@ -387,6 +412,7 @@ function RequestMetric({
 }
 
 function RequestSection({
+  tourId,
   title,
   description,
   count,
@@ -398,6 +424,7 @@ function RequestSection({
   onNext,
   children,
 }: {
+  tourId?: string;
   title: string;
   description: string;
   count: number;
@@ -410,7 +437,10 @@ function RequestSection({
   children: ReactNode;
 }) {
   return (
-    <section className={`rounded-2xl border p-4 sm:p-5 ${priority ? "border-primary/25 bg-primary/5" : "border-border bg-background/40"}`}>
+    <section
+      data-tour={tourId}
+      className={`rounded-2xl border p-4 sm:p-5 ${priority ? "border-primary/25 bg-primary/5" : "border-border bg-background/40"}`}
+    >
       <div className="flex flex-col justify-between gap-3 border-b border-border pb-4 sm:flex-row sm:items-start">
         <div>
           <div className="flex items-center gap-2">

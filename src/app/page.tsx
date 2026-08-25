@@ -99,12 +99,8 @@ export default function Home() {
     const savedTheme = window.localStorage.getItem("scheduler-theme");
     const isDark = savedTheme ? savedTheme === "dark" : false;
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
-
-    const syncThemeState = window.setTimeout(() => {
-      setDarkMode(isDark);
-    }, 0);
-
-    return () => window.clearTimeout(syncThemeState);
+    const timer = window.setTimeout(() => setDarkMode(isDark), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -151,7 +147,8 @@ export default function Home() {
           height={760}
           priority
           aria-hidden="true"
-          className={`pointer-events-none absolute right-[-13rem] top-24 w-[25rem] select-none sm:right-[-15rem] sm:top-16 sm:w-[31rem] lg:right-[-17rem] lg:top-1/2 lg:w-[47.5rem] lg:-translate-y-1/2 ${darkMode ? "opacity-[0.10] lg:opacity-[0.18]" : "opacity-[0.12] lg:opacity-[0.20]"}`}
+          style={{ height: "auto" }}
+          className={`pointer-events-none absolute right-[-13rem] top-24 h-auto w-[25rem] select-none sm:right-[-15rem] sm:top-16 sm:w-[31rem] lg:right-[-17rem] lg:top-1/2 lg:w-[47.5rem] lg:-translate-y-1/2 ${darkMode ? "opacity-[0.10] lg:opacity-[0.18]" : "opacity-[0.12] lg:opacity-[0.20]"}`}
         />
         <div className={`pointer-events-none absolute right-0 top-0 h-full w-full sm:w-3/4 lg:w-1/2 ${darkMode ? "bg-gradient-to-l from-[#07142b]/62 via-[#08111f]/34 to-transparent lg:from-[#07142b]/76 lg:via-[#08111f]/42" : "bg-gradient-to-l from-[#fffaf0]/78 via-[#fffaf0]/45 to-transparent lg:from-[#fffaf0]/70"}`} />
         <div className="relative mx-auto grid min-h-[38rem] w-full max-w-[94rem] items-center px-5 py-16 sm:px-8 sm:py-20 lg:px-10 lg:py-24">

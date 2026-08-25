@@ -32,7 +32,7 @@ export default async function InstructorDashboardPage() {
 
   const { data: availabilityData, error: availabilityError } = await supabase
     .from("instructor_availability")
-    .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, is_active, availability_programs(program)")
+    .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, meeting_platform, meeting_url, venue, is_active, availability_programs(program)")
     .eq("instructor_id", user.id)
     .order("start_datetime", { ascending: true });
 
@@ -60,6 +60,9 @@ export default async function InstructorDashboardPage() {
     start_datetime: string;
     end_datetime: string;
     consultation_mode: "f2f" | "online" | "both";
+    meeting_platform?: "none" | "other" | null;
+    meeting_url?: string | null;
+    venue?: string | null;
     is_active: boolean;
     availability_programs?: { program: string }[];
   }>;
@@ -90,7 +93,7 @@ export default async function InstructorDashboardPage() {
         displayName={displayName}
         email={user.email ?? ""}
         dashboardContent={
-          <>
+          <div key="instructor-dashboard-content" className="contents">
             <ClientSafeBoundary>
               <InstructorSummaryCards
                 initialAvailability={availability}
@@ -146,10 +149,10 @@ export default async function InstructorDashboardPage() {
                 </p>
               </div>
             </section>
-          </>
+          </div>
         }
         calendarContent={
-          <section className="mt-5">
+          <section key="instructor-calendar-content" className="mt-5">
             <ClientSafeBoundary
               fallback={
                 <div className="rounded-[1.5rem] border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
@@ -166,8 +169,14 @@ export default async function InstructorDashboardPage() {
           </section>
         }
         profileContent={
-          <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
-            <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+          <section
+            key="instructor-profile-content"
+            className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"
+          >
+            <div
+              data-tour="instructor-profile-info"
+              className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7"
+            >
               <p className="text-sm font-semibold text-[#a51c30]">
                 Instructor identity
               </p>
@@ -179,7 +188,10 @@ export default async function InstructorDashboardPage() {
                 details, and approved consultation records.
               </p>
             </div>
-            <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7">
+            <div
+              data-tour="instructor-profile-details"
+              className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm sm:p-7"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-2xl bg-[#a51c30]/10 text-[#a51c30]">
                   <UserRound className="size-5" />
@@ -209,4 +221,5 @@ export default async function InstructorDashboardPage() {
     </>
   );
 }
+
 

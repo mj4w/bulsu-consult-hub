@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,9 +32,15 @@ type ConsultationRequest = {
   availability:
     | {
         consultation_mode: ConsultationMode;
+        meeting_platform?: "none" | "other" | null;
+        meeting_url?: string | null;
+        venue?: string | null;
       }[]
     | {
         consultation_mode: ConsultationMode;
+        meeting_platform?: "none" | "other" | null;
+        meeting_url?: string | null;
+        venue?: string | null;
       }
     | null;
 };
@@ -65,10 +71,23 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
+  if (!tokenHasCalendarWriteScope(session.provider_token)) {
+    const grantedPermissions = tokenPermissions(session.provider_token);
+    return NextResponse.json(
+      {
+        error:
+          grantedPermissions.length
+            ? `Your Microsoft session does not include Calendar write access yet. Current token permissions: ${grantedPermissions.join(", ")}. Sign out, then sign in again and accept the Calendar permission.`
+            : "Your Microsoft session does not include Calendar write access yet. Sign out, then sign in again and accept the Calendar permission.",
+      },
+      { status: 403 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("consultation_requests")
     .select(
-      "id, student_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, microsoft_calendar_event_id, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
+      "id, student_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, microsoft_calendar_event_id, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_platform, meeting_url, venue)",
     )
     .eq("id", requestId)
     .eq("student_id", user.id)
@@ -115,9 +134,15 @@ export async function POST(_request: Request, context: RouteContext) {
   });
 
   if (!graphResponse.ok) {
+    const graphError = await microsoftGraphError(graphResponse);
     return NextResponse.json(
-      { error: await microsoftGraphError(graphResponse) },
-      { status: graphResponse.status === 401 ? 401 : 502 },
+      { error: calendarSyncErrorMessage(graphError, graphResponse.status) },
+      {
+        status:
+          graphResponse.status === 401 || graphResponse.status === 403
+            ? 403
+            : 502,
+      },
     );
   }
 
@@ -179,6 +204,19 @@ export async function DELETE(_request: Request, context: RouteContext) {
     );
   }
 
+  if (!tokenHasCalendarWriteScope(session.provider_token)) {
+    const grantedPermissions = tokenPermissions(session.provider_token);
+    return NextResponse.json(
+      {
+        error:
+          grantedPermissions.length
+            ? `Your Microsoft session does not include Calendar write access yet. Current token permissions: ${grantedPermissions.join(", ")}. Sign out, then sign in again and accept the Calendar permission.`
+            : "Your Microsoft session does not include Calendar write access yet. Sign out, then sign in again and accept the Calendar permission.",
+      },
+      { status: 403 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("consultation_requests")
     .select("id, student_id, status, microsoft_calendar_event_id")
@@ -211,9 +249,15 @@ export async function DELETE(_request: Request, context: RouteContext) {
   );
 
   if (!graphResponse.ok && graphResponse.status !== 404) {
+    const graphError = await microsoftGraphError(graphResponse);
     return NextResponse.json(
-      { error: await microsoftGraphError(graphResponse) },
-      { status: graphResponse.status === 401 ? 401 : 502 },
+      { error: calendarSyncErrorMessage(graphError, graphResponse.status) },
+      {
+        status:
+          graphResponse.status === 401 || graphResponse.status === 403
+            ? 403
+            : 502,
+      },
     );
   }
 
@@ -252,6 +296,8 @@ function buildCalendarEvent(request: ReturnType<typeof normalizeConsultationRequ
     "Instructor";
   const mode = consultationModeLabel(request.availability?.consultation_mode);
   const concern = concernLabel(request.concern_type);
+  const meetingUrl = request.availability?.meeting_url?.trim();
+  const venue = request.availability?.venue?.trim();
 
   return {
     subject: `${concern} consultation with ${instructorName}`,
@@ -261,6 +307,12 @@ function buildCalendarEvent(request: ReturnType<typeof normalizeConsultationRequ
         `<p><strong>Consultation Scheduler</strong></p>`,
         `<p><strong>Instructor:</strong> ${escapeHtml(instructorName)}</p>`,
         `<p><strong>Format:</strong> ${escapeHtml(mode)}</p>`,
+        ...(meetingUrl
+          ? [`<p><strong>Meeting link:</strong> <a href="${escapeHtml(meetingUrl)}">${escapeHtml(meetingUrl)}</a></p>`]
+          : []),
+        ...(venue
+          ? [`<p><strong>F2F location:</strong> ${escapeHtml(venue)}</p>`]
+          : []),
         `<p><strong>Purpose:</strong> ${escapeHtml(concern)}</p>`,
         `<p><strong>Concern details:</strong><br />${escapeHtml(request.message).replace(/\n/g, "<br />")}</p>`,
       ].join(""),
@@ -274,7 +326,7 @@ function buildCalendarEvent(request: ReturnType<typeof normalizeConsultationRequ
       timeZone: "UTC",
     },
     location: {
-      displayName: mode,
+      displayName: venue || meetingUrl || mode,
     },
     showAs: "busy",
     isReminderOn: true,
@@ -298,6 +350,58 @@ function concernLabel(concern: string) {
   }[concern] ?? "Consultation";
 }
 
+function tokenHasCalendarWriteScope(token: string) {
+  return tokenPermissions(token).some(
+    (permission) => permission.toLowerCase() === "calendars.readwrite",
+  );
+}
+
+function tokenPermissions(token: string) {
+  const payload = decodeJwtPayload(token);
+  const scopes = String(payload?.scp ?? "")
+    .split(/\s+/)
+    .filter(Boolean);
+  const roles = Array.isArray(payload?.roles)
+    ? payload.roles.map((role) => String(role))
+    : [];
+
+  return [...scopes, ...roles];
+}
+
+function decodeJwtPayload(token: string) {
+  const [, payload] = token.split(".");
+  if (!payload) return null;
+
+  try {
+    const normalizedPayload = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
+
+    return JSON.parse(Buffer.from(normalizedPayload, "base64").toString("utf8")) as
+      | Record<string, unknown>
+      | null;
+  } catch {
+    return null;
+  }
+}
+
+function calendarSyncErrorMessage(graphError: string, status: number) {
+  const lowerError = graphError.toLowerCase();
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    lowerError.includes("access is denied") ||
+    lowerError.includes("insufficient privileges") ||
+    lowerError.includes("unauthorized")
+  ) {
+    return "Microsoft denied calendar access. Sign out, sign in again, and accept Calendar permission. If it still fails, your school tenant admin must grant Calendars.ReadWrite or your account may not have an Outlook mailbox/license.";
+  }
+
+  return graphError;
+}
+
 async function microsoftGraphError(response: Response) {
   try {
     const payload = (await response.json()) as {
@@ -319,3 +423,4 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+

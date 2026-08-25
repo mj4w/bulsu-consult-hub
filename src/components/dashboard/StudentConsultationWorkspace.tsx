@@ -2,18 +2,20 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
   LockKeyhole,
   MapPin,
   Maximize2,
+  Menu,
   Minimize2,
   Monitor,
   Search,
@@ -28,6 +30,7 @@ import { LogoutButton } from "@/components/auth/LogoutButton";
 import { SessionTimeout } from "@/components/auth/SessionTimeout";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { DashboardGuidedTour } from "@/components/dashboard/DashboardGuidedTour";
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
@@ -36,11 +39,16 @@ import {
   type StudentHistoryRequest,
 } from "@/components/dashboard/StudentHistoryPanel";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import {
+  isWalkthroughCompleted,
+  markWalkthroughCompleted,
+} from "@/lib/walkthroughs";
 
 import {
   StudentApprovedConsultationModal,
   type ApprovedConsultation,
 } from "@/components/dashboard/StudentApprovedConsultationModal";
+import { notifyConsultationEmail } from "@/lib/email/client-notifications";
 
 type Availability = {
   id: string;
@@ -49,6 +57,9 @@ type Availability = {
   start_datetime: string;
   end_datetime: string;
   consultation_mode: "f2f" | "online" | "both";
+  meeting_platform?: "none" | "other" | null;
+  meeting_url?: string | null;
+  venue?: string | null;
   availability_programs?: { program: string }[];
   instructor?: { full_name: string | null; email: string | null } | null;
 };
@@ -76,6 +87,9 @@ type ConsultationRequest = {
   instructor?: { full_name: string | null; email: string | null } | null;
   availability?: {
     consultation_mode: Availability["consultation_mode"];
+    meeting_platform?: Availability["meeting_platform"];
+    meeting_url?: string | null;
+    venue?: string | null;
   } | null;
 };
 
@@ -88,8 +102,18 @@ type ConsultationRequestRow = Omit<
     | { full_name: string | null; email: string | null }
     | null;
   availability?:
-    | { consultation_mode: Availability["consultation_mode"] }[]
-    | { consultation_mode: Availability["consultation_mode"] }
+    | {
+        consultation_mode: Availability["consultation_mode"];
+        meeting_platform?: Availability["meeting_platform"];
+        meeting_url?: string | null;
+        venue?: string | null;
+      }[]
+    | {
+        consultation_mode: Availability["consultation_mode"];
+        meeting_platform?: Availability["meeting_platform"];
+        meeting_url?: string | null;
+        venue?: string | null;
+      }
     | null;
 };
 
@@ -191,6 +215,7 @@ export function StudentConsultationWorkspace({
   requests: ConsultationRequest[];
   occupiedSlots: OccupiedSlot[];
 }) {
+  const router = useRouter();
   const profileComplete = Boolean(profile?.program && profile?.section);
   const [availableWindows, setAvailableWindows] = useState(availability);
   const [studentRequests, setStudentRequests] = useState(requests);
@@ -209,6 +234,9 @@ export function StudentConsultationWorkspace({
     message: string;
     tone: "success" | "error";
   } | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const tourScope = `student_${activeView}`;
   const pendingRequests = studentRequests.filter(
     (request) => request.status === "pending",
   ).length;
@@ -281,11 +309,51 @@ export function StudentConsultationWorkspace({
     return () => window.clearTimeout(timer);
   }, [searchParams]);
 
+  useEffect(() => {
+    if (searchParams.get("profile") !== "saved") return;
+
+    const timer = window.setTimeout(() => {
+      setToast({
+        message: "Profile saved successfully.",
+        tone: "success",
+      });
+      router.replace("/dashboard/student", { scroll: false });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const timer = window.setTimeout(() => {
+      void isWalkthroughCompleted(tourScope).then((completed) => {
+        if (cancelled || completed) return;
+        setTourStep(0);
+        setTourOpen(true);
+      });
+    }, 650);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [tourScope]);
+
   function changeActiveView(view: StudentDashboardView) {
     setActiveView(view);
     const nextHash = view === "dashboard" ? "" : `#${view}`;
     const nextUrl = `${window.location.pathname}${nextHash}`;
     window.history.replaceState(null, "", nextUrl);
+  }
+
+  function openTour() {
+    setTourStep(0);
+    setTourOpen(true);
+  }
+
+  function closeTour() {
+    setTourOpen(false);
   }
 
   useEffect(() => {
@@ -297,7 +365,7 @@ export function StudentConsultationWorkspace({
       const { data, error } = await supabase
         .from("instructor_availability")
         .select(
-          "id, instructor_id, instructor_display_name, start_datetime, end_datetime, consultation_mode, availability_programs(program), instructor:profiles!instructor_availability_instructor_id_fkey(full_name, email)",
+          "id, instructor_id, instructor_display_name, start_datetime, end_datetime, consultation_mode, meeting_platform, meeting_url, venue, availability_programs(program), instructor:profiles!instructor_availability_instructor_id_fkey(full_name, email)",
         )
         .eq("is_active", true)
         .order("start_datetime", { ascending: true });
@@ -335,7 +403,7 @@ export function StudentConsultationWorkspace({
       const { data, error } = await supabase
         .from("consultation_requests")
         .select(
-          "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
+          "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_platform, meeting_url, venue)",
         )
         .eq("student_id", user.id)
         .order("created_at", { ascending: false });
@@ -415,11 +483,17 @@ export function StudentConsultationWorkspace({
       )
       .subscribe();
 
+    const fallbackAvailabilityRefresh = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshAvailability({ silent: true });
+    }, 2_500);
+
     const refreshOnFocus = () => refreshStudentWorkspace({ silent: true });
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       supabase.removeChannel(channel);
+      window.clearInterval(fallbackAvailabilityRefresh);
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);
@@ -455,7 +529,7 @@ export function StudentConsultationWorkspace({
         message,
       })
       .select(
-        "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode)",
+        "id, availability_id, instructor_id, requested_start_datetime, requested_end_datetime, concern_type, message, status, decision_note, created_at, microsoft_calendar_event_id, microsoft_calendar_synced_at, instructor:profiles!consultation_requests_instructor_id_fkey(full_name, email), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_platform, meeting_url, venue)",
       )
       .single();
 
@@ -483,6 +557,7 @@ export function StudentConsultationWorkspace({
       message: "Consultation request sent for instructor review.",
       tone: "success",
     });
+    void notifyConsultationEmail(data.id, "request_submitted");
     return true;
   }
 
@@ -531,6 +606,7 @@ export function StudentConsultationWorkspace({
         }`}
       >
         <StudentSidebar
+          tourId="student-sidebar"
           activeView={activeView}
           displayName={displayName}
           email={email}
@@ -540,6 +616,7 @@ export function StudentConsultationWorkspace({
         />
         <section className="flex min-w-0 flex-1 flex-col">
           <StudentTopBar
+            tourId="student-topbar"
             activeView={activeView}
             sidebarCollapsed={sidebarCollapsed}
             onViewChange={changeActiveView}
@@ -550,10 +627,14 @@ export function StudentConsultationWorkspace({
               setSelectedApprovedConsultation(request);
               setDashboardSearch("");
             }}
+            onOpenTour={openTour}
           />
 
           <div className="w-full px-4 py-5 sm:px-6 lg:px-8 lg:pt-24">
-            <div className="relative rounded-[1.5rem] border border-border bg-card p-5 sm:p-7">
+            <div
+              data-tour="student-hero"
+              className="relative rounded-[1.5rem] border border-border bg-card p-5 sm:p-7"
+            >
               <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a51c30]">
@@ -609,8 +690,9 @@ export function StudentConsultationWorkspace({
               </div>
             </div>
 
-            {activeView === "dashboard" && (
-              <>
+            <div data-tour="student-content">
+              {activeView === "dashboard" && (
+                <>
                 <section className="mt-5 grid gap-4 md:grid-cols-3">
                   <SummaryCard
                     icon={CalendarRange}
@@ -650,10 +732,10 @@ export function StudentConsultationWorkspace({
                   }
                   onFindTime={() => changeActiveView("calendar")}
                 />
-              </>
-            )}
+                </>
+              )}
 
-            {activeView === "calendar" && (
+              {activeView === "calendar" && (
               <section
                 id="calendar"
                 className={`mt-5 grid gap-6 ${profileComplete ? "lg:grid-cols-1" : "lg:grid-cols-[1.45fr_0.55fr]"}`}
@@ -669,17 +751,20 @@ export function StudentConsultationWorkspace({
                 />
                 {!profileComplete && <ProfileStatusPanel complete={false} />}
               </section>
-            )}
+              )}
 
-            {activeView === "history" && (
+              {activeView === "history" && (
               <section className="mt-5">
                 <StudentHistoryPanel initialRequests={historyRequests} />
               </section>
-            )}
+              )}
 
-            {activeView === "profile" && (
+              {activeView === "profile" && (
               <section className="mt-5 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
-                <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
+                <div
+                  data-tour="student-profile-info"
+                  className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7"
+                >
                   <p className="text-sm font-semibold text-[#a51c30]">
                     Account setup
                   </p>
@@ -703,9 +788,9 @@ export function StudentConsultationWorkspace({
                 </div>
                 <ProfileForm profile={profile} email={email} />
               </section>
-            )}
+              )}
 
-            {activeView === "dashboard" && (
+              {activeView === "dashboard" && (
             <section className="mt-5 grid gap-6 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
                 <div className="flex items-center justify-between gap-4">
@@ -790,7 +875,8 @@ export function StudentConsultationWorkspace({
                 </div>
               </div>
             </section>
-            )}
+              )}
+            </div>
           </div>
         </section>
       </div>
@@ -823,6 +909,21 @@ export function StudentConsultationWorkspace({
           onClose={() => setToast(null)}
         />
       )}
+      <DashboardGuidedTour
+        role="student"
+        context={activeView}
+        open={tourOpen}
+        step={tourStep}
+        onStepChange={setTourStep}
+        onClose={closeTour}
+        onFinished={() => {
+          void markWalkthroughCompleted(tourScope);
+          setToast({
+            message: "Walkthrough completed.",
+            tone: "success",
+          });
+        }}
+      />
     </main>
   );
 }
@@ -833,6 +934,7 @@ function BodyPortal({ children }: { children: ReactNode }) {
 }
 
 function StudentSidebar({
+  tourId,
   activeView,
   displayName,
   email,
@@ -840,6 +942,7 @@ function StudentSidebar({
   onToggleCollapsed,
   onViewChange,
 }: {
+  tourId: string;
   activeView: StudentDashboardView;
   displayName: string;
   email: string;
@@ -858,6 +961,7 @@ function StudentSidebar({
 
   return (
     <aside
+      data-tour={tourId}
       className={`fixed left-0 top-0 z-50 hidden h-screen overflow-visible border-r border-border bg-card py-5 transition-[width,padding] duration-300 lg:flex lg:flex-col ${
         collapsed ? "w-20 px-3" : "w-64 px-4"
       }`}
@@ -979,6 +1083,7 @@ function StudentSidebar({
 }
 
 function StudentTopBar({
+  tourId,
   activeView,
   sidebarCollapsed,
   onViewChange,
@@ -986,7 +1091,9 @@ function StudentTopBar({
   onSearchChange,
   searchResults,
   onSelectSearchResult,
+  onOpenTour,
 }: {
+  tourId: string;
   activeView: StudentDashboardView;
   sidebarCollapsed: boolean;
   onViewChange: (view: StudentDashboardView) => void;
@@ -994,17 +1101,47 @@ function StudentTopBar({
   onSearchChange: (value: string) => void;
   searchResults: ConsultationRequest[];
   onSelectSearchResult: (request: ConsultationRequest) => void;
+  onOpenTour: () => void;
 }) {
-  const mobileNavButtonClass = (view: StudentDashboardView) =>
-    `shrink-0 rounded-full px-4 py-2 font-medium ${
-      activeView === view
-        ? "bg-foreground text-background"
-        : "border border-border text-muted-foreground"
-    }`;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hasSearch = search.trim().length > 0;
+  const mobileNavItems = [
+    {
+      view: "dashboard" as const,
+      label: "Dashboard",
+      description: "Overview and upcoming consultation",
+      icon: LayoutDashboard,
+    },
+    {
+      view: "calendar" as const,
+      label: "Calendar",
+      description: "Find and request a consultation time",
+      icon: CalendarRange,
+    },
+    {
+      view: "history" as const,
+      label: "History",
+      description: "Review pending and past requests",
+      icon: ClipboardList,
+    },
+    {
+      view: "profile" as const,
+      label: "My profile",
+      description: "Manage student information",
+      icon: UserRound,
+    },
+  ];
+  const activeMobileItem =
+    mobileNavItems.find((item) => item.view === activeView) ?? mobileNavItems[0];
+
+  function handleMobileViewChange(view: StudentDashboardView) {
+    setMobileMenuOpen(false);
+    onViewChange(view);
+  }
 
   return (
     <header
+      data-tour={tourId}
       className={`sticky top-0 z-40 border-b border-border bg-background/95 shadow-sm backdrop-blur-xl transition-[left] duration-300 lg:fixed lg:right-0 ${
         sidebarCollapsed ? "lg:left-20" : "lg:left-64"
       }`}
@@ -1085,42 +1222,94 @@ function StudentTopBar({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="relative flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenTour}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted max-sm:size-10 max-sm:justify-center max-sm:px-0"
+            aria-label="Open walkthrough"
+          >
+            <CircleHelp className="size-4 text-[#a51c30]" />
+            <span className="hidden sm:inline">Tour</span>
+          </button>
           <NotificationBell role="student" />
           <ThemeToggle />
-          <LogoutButton />
+          <div className="hidden sm:block">
+            <LogoutButton />
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((current) => !current)}
+            className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition hover:bg-muted lg:hidden"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+
+          {mobileMenuOpen && (
+            <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-[1.5rem] border border-border bg-card shadow-2xl lg:hidden">
+              <div className="border-b border-border bg-muted/35 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#a51c30]">
+                  Student menu
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Current section:{" "}
+                  <span className="font-semibold text-foreground">
+                    {activeMobileItem.label}
+                  </span>
+                </p>
+              </div>
+
+              <nav className="grid gap-1 p-2 text-sm">
+                {mobileNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = item.view === activeView;
+
+                  return (
+                    <button
+                      type="button"
+                      key={item.view}
+                      onClick={() => handleMobileViewChange(item.view)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                        active
+                          ? "bg-[#a51c30] text-white shadow-sm"
+                          : "text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <span
+                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
+                          active
+                            ? "bg-white/15 text-white"
+                            : "bg-muted text-[#a51c30]"
+                        }`}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold">
+                          {item.label}
+                        </span>
+                        <span
+                          className={`mt-0.5 block text-xs ${
+                            active ? "text-white/75" : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.description}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="border-t border-border p-2 sm:hidden">
+                <LogoutButton />
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <nav className="flex gap-2 overflow-x-auto border-t border-border px-4 py-3 text-sm text-muted-foreground sm:px-6 lg:hidden">
-        <button
-          type="button"
-          onClick={() => onViewChange("dashboard")}
-          className={mobileNavButtonClass("dashboard")}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("calendar")}
-          className={mobileNavButtonClass("calendar")}
-        >
-          Calendar
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("history")}
-          className={mobileNavButtonClass("history")}
-        >
-          History
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("profile")}
-          className={mobileNavButtonClass("profile")}
-        >
-          My profile
-        </button>
-      </nav>
     </header>
   );
 }
@@ -1345,10 +1534,8 @@ function CalendarPanel({
       }),
     [availability, studentProgram],
   );
-  const firstAvailabilityDate =
-    visibleAvailability[0]?.start_datetime ?? new Date().toISOString();
   const [weekStart, setWeekStart] = useState(() =>
-    startOfWeek(new Date(firstAvailabilityDate)),
+    startOfWeek(new Date()),
   );
   const [fullView, setFullView] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -1433,6 +1620,7 @@ function CalendarPanel({
 
   const calendarSection = (
     <section
+      data-tour="student-calendar-overview"
       className={`relative border border-border bg-card p-4 transition-all sm:p-8 ${
         fullView
           ? "flex h-full w-full flex-col overflow-hidden rounded-none border-0 bg-background p-0"
@@ -1480,6 +1668,7 @@ function CalendarPanel({
       )}
 
       <div
+        data-tour="student-calendar-controls"
         className={`flex flex-col justify-between gap-4 sm:flex-row sm:items-end ${fullView ? "hidden" : ""}`}
       >
         <div>
@@ -1539,6 +1728,7 @@ function CalendarPanel({
           Swipe the calendar sideways to see wider day columns.
         </p>
         <div
+          data-tour="student-calendar-grid"
           className={`overflow-auto border border-border bg-background/35 ${fullView ? "m-0 min-h-0 flex-1 rounded-none border-0" : "mt-3 max-h-[44rem] rounded-[1.25rem] sm:mt-5"}`}
         >
           <div
@@ -1773,7 +1963,7 @@ function StudentRequestableSlot({
   const width =
     slot.laneCount > 1
       ? `calc(${laneWidth}% - ${gap}px)`
-      : "min(9.5rem, calc(100% - 16px))";
+      : "calc(100% - 16px)";
   const left =
     slot.laneCount > 1
       ? `calc(${slot.lane * laneWidth}% + ${gap / 2}px)`
@@ -2667,6 +2857,7 @@ function ProfileStatusPanel({ complete }: { complete: boolean }) {
     </section>
   );
 }
+
 
 
 

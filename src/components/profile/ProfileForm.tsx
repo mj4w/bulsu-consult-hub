@@ -51,15 +51,19 @@ export function ProfileForm({ profile, email }: { profile: Profile | null; email
     setError("");
     setLoading(true);
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.replace("/login"); return; }
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      setLoading(false);
+      router.replace("/login");
+      return;
+    }
     if (profile?.role === "student" && (!program.trim() || !section.trim())) {
       setError("Program and section are required.");
       setLoading(false);
       return;
     }
 
-    const { data: savedProfile, error: updateError } = await supabase
+    const saveProfile = supabase
       .from("profiles")
       .update({
         full_name: fullName.trim() || null,
@@ -74,6 +78,28 @@ export function ProfileForm({ profile, email }: { profile: Profile | null; email
       .select("id")
       .maybeSingle();
 
+    const timeout = new Promise<{
+      data: null;
+      error: { message: string };
+    }>((resolve) => {
+      window.setTimeout(
+        () =>
+          resolve({
+            data: null,
+            error: {
+              message:
+                "Profile save took too long. Check your connection and try again.",
+            },
+          }),
+        10_000,
+      );
+    });
+
+    const { data: savedProfile, error: updateError } = await Promise.race([
+      saveProfile,
+      timeout,
+    ]);
+
     if (updateError) {
       setError(`We could not save your profile: ${updateError.message}`);
       setLoading(false);
@@ -86,11 +112,22 @@ export function ProfileForm({ profile, email }: { profile: Profile | null; email
       return;
     }
 
-    router.replace(profile?.role === "instructor" ? "/dashboard/instructor" : "/dashboard/student");
+    const dashboardPath =
+      profile?.role === "instructor"
+        ? "/dashboard/instructor"
+        : "/dashboard/student";
+
+    router.replace(`${dashboardPath}?profile=saved`);
+    router.refresh();
+    window.setTimeout(() => setLoading(false), 1500);
   }
 
   return (
-    <form onSubmit={submit} className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
+    <form
+      data-tour="profile-form"
+      onSubmit={submit}
+      className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8"
+    >
       <div className="flex items-start justify-between gap-4 border-b border-border pb-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{profile?.role === "instructor" ? "Instructor profile" : "Student profile"}</p>

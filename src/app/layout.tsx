@@ -21,13 +21,28 @@ export const metadata: Metadata = {
   },
 };
 
+const themeScript = `
+  (function () {
+    try {
+      var theme = window.localStorage.getItem("scheduler-theme") || "light";
+      document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    } catch (error) {
+      document.documentElement.dataset.theme = "light";
+    }
+  })();
+`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${display.variable} ${neutral.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-[family-name:var(--font-neutral)]">{children}</body>
+      <body className="min-h-full flex flex-col font-[family-name:var(--font-neutral)]">
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {children}
+      </body>
     </html>
   );
 }

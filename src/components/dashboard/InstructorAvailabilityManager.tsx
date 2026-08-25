@@ -4,12 +4,14 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
   CalendarPlus,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   MapPin,
   Monitor,
   Pencil,
   Plus,
+  Link2,
   SquareSplitHorizontal,
   Trash2,
   UserRound,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { notifyConsultationEmail } from "@/lib/email/client-notifications";
 
 const programs = [
   "Doctor of Education",
@@ -40,6 +43,9 @@ type Availability = {
   start_datetime: string;
   end_datetime: string;
   consultation_mode: "f2f" | "online" | "both";
+  meeting_platform?: "none" | "other" | null;
+  meeting_url?: string | null;
+  venue?: string | null;
   is_active: boolean;
   instructor_display_name?: string | null;
   availability_programs?: { program: string }[];
@@ -83,6 +89,8 @@ export function InstructorAvailabilityManager({
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [mode, setMode] = useState<Availability["consultation_mode"]>("both");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [venue, setVenue] = useState("");
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -102,7 +110,7 @@ export function InstructorAvailabilityManager({
 
       const { data, error: refreshError } = await supabase
         .from("instructor_availability")
-        .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, is_active, availability_programs(program)")
+        .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, meeting_platform, meeting_url, venue, is_active, availability_programs(program)")
         .eq("instructor_id", user.id)
         .order("start_datetime", { ascending: true });
 
@@ -164,6 +172,8 @@ export function InstructorAvailabilityManager({
     setStart(nextStart);
     setEnd(nextEnd);
     setMode("both");
+    setMeetingUrl("");
+    setVenue("");
     setSelectedPrograms([]);
     setError("");
     setEditorOpen(true);
@@ -172,6 +182,16 @@ export function InstructorAvailabilityManager({
   function closeEditor() {
     setEditorOpen(false);
     setSelectionResetToken((value) => value + 1);
+  }
+
+  function changeMode(nextMode: Availability["consultation_mode"]) {
+    setMode(nextMode);
+    if (nextMode === "f2f") {
+      setMeetingUrl("");
+    }
+    if (nextMode === "online") {
+      setVenue("");
+    }
   }
 
   function toggleProgram(program: string) {
@@ -192,6 +212,10 @@ export function InstructorAvailabilityManager({
     }
     if (!selectedPrograms.length) {
       setError("Select at least one program.");
+      return;
+    }
+    if (meetingUrl.trim() && !isValidMeetingUrl(meetingUrl)) {
+      setError("Enter a valid meeting link that starts with http:// or https://.");
       return;
     }
     const newStart = new Date(start);
@@ -229,6 +253,9 @@ export function InstructorAvailabilityManager({
       user.email?.split("@")[0] ||
       "Instructor";
 
+    const finalMeetingUrl = mode !== "f2f" ? meetingUrl.trim() || null : null;
+    const finalVenue = mode !== "online" ? venue.trim() || null : null;
+
     const { data: created, error: insertError } = await supabase
       .from("instructor_availability")
       .insert({
@@ -237,8 +264,11 @@ export function InstructorAvailabilityManager({
         start_datetime: new Date(start).toISOString(),
         end_datetime: new Date(end).toISOString(),
         consultation_mode: mode,
+        meeting_platform: mode === "f2f" ? "none" : "other",
+        meeting_url: finalMeetingUrl,
+        venue: finalVenue,
       })
-      .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, is_active")
+      .select("id, instructor_display_name, start_datetime, end_datetime, consultation_mode, meeting_platform, meeting_url, venue, is_active")
       .single();
     if (insertError || !created) {
       setError(insertError?.message ?? "Could not create consultation window.");
@@ -342,6 +372,7 @@ export function InstructorAvailabilityManager({
     );
     setOccupiedDetails(updated);
     setMessage("Consultation rescheduled.");
+    void notifyConsultationEmail(updated.id, "instructor_rescheduled_approved");
     return true;
   }
 
@@ -384,10 +415,14 @@ export function InstructorAvailabilityManager({
     );
     setOccupiedDetails(null);
     setMessage("Consultation cancelled.");
+    void notifyConsultationEmail(request.id, "instructor_cancelled_approved");
   }
 
   return (
-    <section className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm sm:p-8">
+    <section
+      data-tour="instructor-calendar-overview"
+      className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm sm:p-8"
+    >
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -403,6 +438,7 @@ export function InstructorAvailabilityManager({
           </p>
         </div>
         <button
+          data-tour="instructor-add-window"
           onClick={() => openNewWindow("", "")}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
         >
@@ -428,6 +464,8 @@ export function InstructorAvailabilityManager({
           start={start}
           end={end}
           mode={mode}
+          meetingUrl={meetingUrl}
+          venue={venue}
           selectedPrograms={selectedPrograms}
           saving={saving}
           error={error}
@@ -436,7 +474,9 @@ export function InstructorAvailabilityManager({
           onSave={save}
           onStartChange={setStart}
           onEndChange={setEnd}
-          onModeChange={setMode}
+          onModeChange={changeMode}
+          onMeetingUrlChange={setMeetingUrl}
+          onVenueChange={setVenue}
           onToggleProgram={toggleProgram}
         />
       )}
@@ -471,7 +511,10 @@ function CalendarToolbar({
   const [open, setOpen] = useState(false);
   const views = ["Week", "Month"];
   return (
-    <div className="mt-7 flex items-center justify-between gap-3 lg:ml-auto">
+    <div
+      data-tour="instructor-calendar-controls"
+      className="mt-7 flex items-center justify-between gap-3 lg:ml-auto"
+    >
       <button
         type="button"
         onClick={onToday}
@@ -485,7 +528,7 @@ function CalendarToolbar({
           onClick={() => setOpen((value) => !value)}
           className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-[#2563eb]/40 hover:text-[#2563eb]"
         >
-          {view} <span className="ml-2 text-muted-foreground">⌄</span>
+          {view} <ChevronDown className="ml-2 inline size-3.5 text-muted-foreground" />
         </button>
         {open && (
           <div className="absolute right-0 top-11 z-[100] w-40 overflow-hidden rounded-xl border border-border bg-card p-1 shadow-xl">
@@ -585,7 +628,7 @@ function CalendarGrid({
     addDays(weekStart, index),
   );
   const hours = Array.from({ length: 14 }, (_, index) => index + 7);
-  const weekLabel = `${dateLabel(days[0], { month: "short", day: "numeric" })} – ${dateLabel(days[6], { month: "short", day: "numeric", year: "numeric" })}`;
+  const weekLabel = `${dateLabel(days[0], { month: "short", day: "numeric" })} - ${dateLabel(days[6], { month: "short", day: "numeric", year: "numeric" })}`;
 
   if (view === "Month") {
     return (
@@ -716,7 +759,10 @@ function CalendarGrid({
   }
 
   return (
-    <div className="mt-7 overflow-hidden rounded-2xl border border-border">
+    <div
+      data-tour="instructor-calendar-grid"
+      className="mt-7 overflow-hidden rounded-2xl border border-border"
+    >
       <div className="border-b border-border bg-muted/30 px-4 py-3">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
@@ -1047,7 +1093,7 @@ function InstructorAvailabilityEvent({
         ? "Online"
         : "Online or F2F";
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const time = `${dateLabel(new Date(event.start_datetime), { hour: "numeric", minute: "2-digit" })} – ${dateLabel(new Date(event.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
+  const time = `${dateLabel(new Date(event.start_datetime), { hour: "numeric", minute: "2-digit" })} - ${dateLabel(new Date(event.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
   const startHour = Math.max(7, start.getHours() + start.getMinutes() / 60);
   const endHour = Math.min(21, end.getHours() + end.getMinutes() / 60);
   const rawHeight = Math.max(0, (endHour - startHour) * 64);
@@ -1138,6 +1184,8 @@ function AvailabilityEditor({
   start,
   end,
   mode,
+  meetingUrl,
+  venue,
   selectedPrograms,
   saving,
   error,
@@ -1147,11 +1195,15 @@ function AvailabilityEditor({
   onStartChange,
   onEndChange,
   onModeChange,
+  onMeetingUrlChange,
+  onVenueChange,
   onToggleProgram,
 }: {
   start: string;
   end: string;
   mode: Availability["consultation_mode"];
+  meetingUrl: string;
+  venue: string;
   selectedPrograms: string[];
   saving: boolean;
   error: string;
@@ -1161,8 +1213,13 @@ function AvailabilityEditor({
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
   onModeChange: (value: Availability["consultation_mode"]) => void;
+  onMeetingUrlChange: (value: string) => void;
+  onVenueChange: (value: string) => void;
   onToggleProgram: (program: string) => void;
 }) {
+  const supportsMeetingLink = mode === "online" || mode === "both";
+  const supportsVenue = mode === "f2f" || mode === "both";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <form
@@ -1182,10 +1239,10 @@ function AvailabilityEditor({
           <button
             type="button"
             onClick={onClose}
-            className="text-2xl leading-none text-muted-foreground hover:text-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Close"
           >
-            ×
+            <X className="size-4" />
           </button>
         </div>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -1231,6 +1288,51 @@ function AvailabilityEditor({
             </button>
           ))}
         </div>
+        {supportsMeetingLink && (
+          <div className="mt-6 rounded-2xl border border-border bg-muted/25 p-4">
+            <div className="flex items-start gap-3">
+              <Monitor className="mt-1 size-4 text-[#2563eb]" />
+              <div>
+                <p className="text-sm font-medium">Online meeting link</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Optionally paste the meeting URL you created in your
+                  preferred platform. Students will see it after approval.
+                </p>
+              </div>
+            </div>
+            <Field label="Meeting URL (optional)">
+              <input
+                className="profile-input"
+                type="url"
+                value={meetingUrl}
+                onChange={(event) => onMeetingUrlChange(event.target.value)}
+                placeholder="https://your-meeting-link.example/..."
+              />
+            </Field>
+          </div>
+        )}
+        {supportsVenue && (
+          <div className="mt-6 rounded-2xl border border-border bg-muted/25 p-4">
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-1 size-4 text-[#b91c1c]" />
+              <div>
+                <p className="text-sm font-medium">F2F location</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Optionally enter the room, office, building, or campus
+                  location for face-to-face consultation.
+                </p>
+              </div>
+            </div>
+            <Field label="Location (optional)">
+              <input
+                className="profile-input"
+                value={venue}
+                onChange={(event) => onVenueChange(event.target.value)}
+                placeholder="e.g. Graduate School Faculty Room"
+              />
+            </Field>
+          </div>
+        )}
         <p className="mt-6 text-sm font-medium">Who can request this window?</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Select the graduate programs allowed to request this time.
@@ -1292,8 +1394,8 @@ function AvailabilityDetails({
   } as const;
   const date = sameCalendarDay(startDate, endDate)
     ? dateLabel(startDate, dateFormat)
-    : `${dateLabel(startDate, dateFormat)} – ${dateLabel(endDate, dateFormat)}`;
-  const time = `${dateLabel(new Date(item.start_datetime), { hour: "numeric", minute: "2-digit" })} – ${dateLabel(new Date(item.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
+    : `${dateLabel(startDate, dateFormat)} - ${dateLabel(endDate, dateFormat)}`;
+  const time = `${dateLabel(new Date(item.start_datetime), { hour: "numeric", minute: "2-digit" })} - ${dateLabel(new Date(item.end_datetime), { hour: "numeric", minute: "2-digit" })}`;
   const mode =
     item.consultation_mode === "f2f"
       ? "F2F"
@@ -1313,9 +1415,10 @@ function AvailabilityDetails({
           <button
             type="button"
             onClick={onClose}
-            className="text-2xl leading-none text-muted-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            aria-label="Close"
           >
-            ×
+            <X className="size-4" />
           </button>
         </div>
         <div className="mt-6 space-y-4 text-sm">
@@ -1327,6 +1430,34 @@ function AvailabilityDetails({
             <p className="text-xs text-muted-foreground">Format</p>
             <p className="mt-1 font-medium">{mode}</p>
           </div>
+          {item.consultation_mode !== "f2f" && item.meeting_url && (
+              <div className="rounded-2xl border border-border bg-muted/25 p-4">
+                <p className="text-xs text-muted-foreground">
+                  Online meeting
+                </p>
+                <p className="mt-1 inline-flex items-center gap-2 font-medium">
+                  <Link2 className="size-4 text-[#2563eb]" />
+                  Meeting link
+                </p>
+                <a
+                  href={item.meeting_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block break-all text-sm font-medium text-[#2563eb] hover:underline"
+                >
+                  {item.meeting_url}
+                </a>
+              </div>
+            )}
+          {item.consultation_mode !== "online" && item.venue && (
+            <div className="rounded-2xl border border-border bg-muted/25 p-4">
+              <p className="text-xs text-muted-foreground">F2F location</p>
+              <p className="mt-1 inline-flex items-center gap-2 font-medium">
+                <MapPin className="size-4 text-[#b91c1c]" />
+                {item.venue}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-muted-foreground">Programs allowed</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -1409,10 +1540,10 @@ function OccupiedDetails({
           <button
             type="button"
             onClick={onClose}
-            className="text-2xl leading-none text-muted-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Close"
           >
-            ×
+            <X className="size-4" />
           </button>
         </div>
 
@@ -1568,6 +1699,15 @@ function ConsultationModeIcon({
   if (mode === "online") return <Monitor className={className} />;
   if (mode === "f2f") return <MapPin className={className} />;
   return <SquareSplitHorizontal className={className} />;
+}
+
+function isValidMeetingUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function Toast({ message, tone, onClose }: { message: string; tone: "success" | "error"; onClose: () => void }) {
@@ -1811,3 +1951,4 @@ function sameCalendarDay(first: Date, second: Date) {
     first.getDate() === second.getDate()
   );
 }
+

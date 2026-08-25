@@ -7,6 +7,8 @@ type CalendarInviteInput = {
   message: string;
   start: string;
   end: string;
+  meetingUrl?: string | null;
+  venue?: string | null;
 };
 
 export function downloadConsultationInvite({
@@ -18,6 +20,8 @@ export function downloadConsultationInvite({
   message,
   start,
   end,
+  meetingUrl,
+  venue,
 }: CalendarInviteInput) {
   const startsAt = new Date(start);
   const endsAt = new Date(end);
@@ -36,13 +40,16 @@ export function downloadConsultationInvite({
     `DTSTART:${formatIcsDate(startsAt)}`,
     `DTEND:${formatIcsDate(endsAt)}`,
     `SUMMARY:${escapeIcsText(title)}`,
-    `LOCATION:${escapeIcsText(mode)}`,
+    `LOCATION:${escapeIcsText(venue || meetingUrl || mode)}`,
+    ...(meetingUrl ? [`URL:${escapeIcsText(meetingUrl)}`] : []),
     `DESCRIPTION:${escapeIcsText(
       [
         "Consultation Appointment",
         "",
         `Instructor: ${instructorName}`,
         `Consultation format: ${mode}`,
+        ...(meetingUrl ? [`Meeting link: ${meetingUrl}`] : []),
+        ...(venue ? [`F2F location: ${venue}`] : []),
         `Purpose: ${concern}`,
         "",
         "Student concern:",
