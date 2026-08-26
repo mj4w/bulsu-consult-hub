@@ -43,7 +43,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email notification request." }, { status: 400 });
   }
 
-  const consultation = await getConsultationEmailRequest(body.requestId);
+  const consultation = await getConsultationEmailRequest(body.requestId).catch(
+    (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not load consultation request for email notification.";
+
+      console.warn("Consultation email request lookup failed:", {
+        requestId: body.requestId,
+        event: body.event,
+        message,
+      });
+
+      return { error: message };
+    },
+  );
+
+  if (consultation && "error" in consultation) {
+    return NextResponse.json(
+      {
+        error: "Email notification setup error.",
+        detail: consultation.error,
+      },
+      { status: 500 },
+    );
+  }
+
   if (!consultation) {
     return NextResponse.json({ error: "Consultation request not found." }, { status: 404 });
   }

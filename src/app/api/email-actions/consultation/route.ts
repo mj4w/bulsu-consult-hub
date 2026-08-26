@@ -222,7 +222,7 @@ function actionPage({
   message: string;
   tone: "success" | "warning" | "error";
 }) {
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const siteUrl = appSiteUrl();
   const color =
     tone === "success" ? "#047857" : tone === "warning" ? "#b45309" : "#b91c1c";
   const html = `<!doctype html>
@@ -247,6 +247,16 @@ function actionPage({
   return new NextResponse(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
+}
+
+function appSiteUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configuredUrl) return configuredUrl.replace(/\/$/, "");
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) return `https://${vercelUrl.replace(/\/$/, "")}`;
+
+  return "http://localhost:3000";
 }
 
 function escapeHtml(value: string) {

@@ -260,44 +260,85 @@ export function consultationEmailTemplate(
   const subject = subjectForType(type, purpose, studentName);
   const intro = introForType(type, studentName, instructorName);
   const theme = emailThemeForType(type);
+  const detailsHtml = details
+    .map(
+      ([label, value], index) => `
+        <tr>
+          <td style="width:34%;padding:14px 16px;border-top:${index === 0 ? "0" : "1px solid #e5e7eb"};background:#f8fafc;color:#475569;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;vertical-align:top;">
+            ${escapeHtml(label)}
+          </td>
+          <td style="padding:14px 16px;border-top:${index === 0 ? "0" : "1px solid #e5e7eb"};color:#111827;font-size:14px;font-weight:700;line-height:1.55;vertical-align:top;word-break:break-word;white-space:pre-wrap;">
+            ${linkifyIfUrl(value)}
+          </td>
+        </tr>
+      `,
+    )
+    .join("");
   const html = `
-    <div style="margin:0;background:#f8fafc;padding:28px;font-family:Arial,sans-serif;color:#0f172a;">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
-        <div style="padding:24px;background:${theme.header};color:${theme.headerText};">
-          <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">BulSU Consult Hub</p>
-          <h1 style="margin:0;font-size:24px;line-height:1.25;">${escapeHtml(subject)}</h1>
+    <div style="margin:0;background:#f3f4f6;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+      <div style="max-width:680px;margin:0 auto;">
+        <div style="border-radius:24px 24px 0 0;background:${theme.header};padding:26px 28px;color:${theme.headerText};">
+          <p style="margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;opacity:.9;">BulSU Consult Hub</p>
+          <h1 style="margin:0;font-size:25px;line-height:1.25;font-weight:800;">${escapeHtml(subject)}</h1>
         </div>
-        <div style="padding:24px;">
+
+        <div style="border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;border-left:1px solid #e5e7eb;border-radius:0 0 24px 24px;background:#ffffff;padding:28px;">
           ${
             options.intendedRecipient
-              ? `<p style="margin:0 0 16px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;padding:12px 14px;font-size:13px;line-height:1.6;color:#9a3412;"><strong>Testing mode:</strong> this email was redirected here. Original recipient: ${escapeHtml(options.intendedRecipient)}</p>`
+              ? `<div style="margin:0 0 18px;border-radius:16px;background:#fff7ed;border:1px solid #fed7aa;padding:13px 15px;font-size:13px;line-height:1.6;color:#9a3412;"><strong>Testing mode:</strong> this email was redirected here. Original recipient: ${escapeHtml(options.intendedRecipient)}</div>`
               : ""
           }
-          <p style="margin:0 0 18px;font-size:15px;line-height:1.7;">${escapeHtml(intro)}</p>
-          <p style="display:inline-block;margin:0 0 18px;border-radius:999px;background:${theme.badgeBg};color:${theme.badgeText};padding:7px 11px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">${escapeHtml(theme.label)}</p>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+            <tr>
+              <td style="padding:0 0 18px;">
+                <span style="display:inline-block;border-radius:999px;background:${theme.badgeBg};color:${theme.badgeText};padding:8px 12px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">
+                  ${escapeHtml(theme.label)}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 0 20px;color:#334155;font-size:15px;line-height:1.75;">
+                ${escapeHtml(intro)}
+              </td>
+            </tr>
+          </table>
+
           ${
             options.actionLinks
-              ? `<div style="margin:0 0 18px;display:flex;gap:10px;flex-wrap:wrap;">
-                  <a href="${escapeHtml(options.actionLinks.approveUrl)}" style="display:inline-block;border-radius:999px;background:#047857;color:#ffffff;text-decoration:none;padding:11px 16px;font-size:14px;font-weight:700;">Approve request</a>
-                  <a href="${escapeHtml(options.actionLinks.declineUrl)}" style="display:inline-block;border-radius:999px;background:#991b1b;color:#ffffff;text-decoration:none;padding:11px 16px;font-size:14px;font-weight:700;">Decline request</a>
-                </div>
-                <p style="margin:0 0 18px;font-size:12px;color:#64748b;line-height:1.6;">These email action links expire after 7 days and can only be used once. You can still review the request in the dashboard.</p>`
+              ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:0 10px 10px 0;">
+                      <a href="${escapeHtml(options.actionLinks.approveUrl)}" style="display:block;border-radius:14px;background:#047857;color:#ffffff;text-align:center;text-decoration:none;padding:13px 18px;font-size:14px;font-weight:800;">Approve request</a>
+                    </td>
+                    <td style="padding:0 0 10px 0;">
+                      <a href="${escapeHtml(options.actionLinks.declineUrl)}" style="display:block;border-radius:14px;background:#ffffff;border:1px solid #fecaca;color:#991b1b;text-align:center;text-decoration:none;padding:12px 18px;font-size:14px;font-weight:800;">Decline request</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding:2px 0 0;color:#64748b;font-size:12px;line-height:1.6;">
+                      These one-time action links expire after 7 days. Use the dashboard if you need to review more context before deciding.
+                    </td>
+                  </tr>
+                </table>`
               : ""
           }
-          <div style="border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
-            ${details
-              .map(
-                ([label, value]) => `
-                  <div style="display:flex;gap:16px;padding:12px 14px;border-bottom:1px solid #e2e8f0;">
-                    <div style="width:130px;flex-shrink:0;font-size:12px;color:#64748b;">${escapeHtml(label)}</div>
-                    <div style="font-size:14px;font-weight:600;line-height:1.5;white-space:pre-wrap;word-break:break-word;">${linkifyIfUrl(value)}</div>
-                  </div>
-                `,
-              )
-              .join("")}
-          </div>
-          <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;margin-top:22px;border-radius:999px;background:${theme.button};color:${theme.buttonText};text-decoration:none;padding:12px 18px;font-size:14px;font-weight:700;">Open dashboard</a>
-          <p style="margin:22px 0 0;font-size:12px;color:#64748b;line-height:1.6;">This is an automated consultation notification. Please do not reply directly to this email.</p>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb;border-radius:18px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+            ${detailsHtml}
+          </table>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:22px;border-collapse:collapse;">
+            <tr>
+              <td>
+                <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;border-radius:999px;background:${theme.button};color:${theme.buttonText};text-decoration:none;padding:12px 18px;font-size:14px;font-weight:800;">Open dashboard</a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:22px 0 0;border-top:1px solid #e5e7eb;padding-top:16px;font-size:12px;color:#64748b;line-height:1.6;">
+            This is an automated consultation notification from BulSU Consult Hub. Please do not reply directly to this email.
+          </p>
         </div>
       </div>
     </div>
@@ -332,7 +373,7 @@ async function createEmailActionLinks(
   supabase: ReturnType<typeof createAdminClient>,
   requestId: string,
 ): Promise<EmailActionLinks> {
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const siteUrl = appSiteUrl();
   const [approveToken, declineToken] = [randomToken(), randomToken()];
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -447,7 +488,7 @@ function dashboardUrlForType(
   request: ConsultationEmailRequest,
   type: ConsultationEmailType,
 ) {
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const siteUrl = appSiteUrl();
   if (
     type === "request_submitted_to_instructor" ||
     type === "student_cancelled_to_instructor" ||
@@ -457,6 +498,16 @@ function dashboardUrlForType(
   }
 
   return `${siteUrl}/dashboard/student?request=${request.id}#history`;
+}
+
+function appSiteUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configuredUrl) return configuredUrl.replace(/\/$/, "");
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) return `https://${vercelUrl.replace(/\/$/, "")}`;
+
+  return "http://localhost:3000";
 }
 
 function emailThemeForType(type: ConsultationEmailType) {
