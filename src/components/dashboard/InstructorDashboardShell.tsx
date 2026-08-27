@@ -131,10 +131,24 @@ export function InstructorDashboardShell({
 
   const routeForView = useCallback((view: InstructorDashboardView) => {
     if (view === "calendar") return "/dashboard/instructor#calendar";
-    if (view === "profile") return "/onboarding";
+    if (view === "profile") return "/dashboard/instructor#profile";
     if (view === "requests") return "/dashboard/instructor/requests";
     return "/dashboard/instructor";
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("welcome") !== "1") return;
+
+    const timer = window.setTimeout(() => {
+      setToast({
+        message: `Welcome, ${displayName}.`,
+        tone: "success",
+      });
+      router.replace(routeForView(activeView), { scroll: false });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [activeView, displayName, routeForView, router, searchParams]);
 
   useEffect(() => {
     if (searchParams.get("profile") !== "saved") return;
@@ -521,7 +535,7 @@ function InstructorSidebar({
           ) : (
             <Link
               data-tour="instructor-profile-tab"
-              href="/onboarding"
+              href="/dashboard/instructor#profile"
               title="My profile"
               className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-muted-foreground transition hover:bg-muted hover:text-foreground ${
                 collapsed ? "justify-center" : "gap-3"
@@ -955,7 +969,8 @@ function InstructorTopBar({
         ) : (
           <Link
             data-tour="instructor-profile-tab"
-            href="/onboarding"
+            href="/dashboard/instructor#profile"
+            onClick={() => setMobileMenuOpen(false)}
             className="shrink-0 rounded-full border border-border px-4 py-2"
           >
             My profile

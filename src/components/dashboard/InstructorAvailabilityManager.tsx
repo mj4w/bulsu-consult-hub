@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   MapPin,
   Monitor,
   Pencil,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { downloadConsultationInvite } from "@/lib/calendar/ics";
 import { notifyConsultationEmail } from "@/lib/email/client-notifications";
 
 const programs = [
@@ -71,6 +73,11 @@ export type OccupiedConsultation = {
     email: string | null;
     program: string | null;
     section: string | null;
+  } | null;
+  availability?: {
+    consultation_mode: Availability["consultation_mode"];
+    meeting_url?: string | null;
+    venue?: string | null;
   } | null;
 };
 
@@ -132,7 +139,7 @@ export function InstructorAvailabilityManager({
 
       const { data, error: refreshError } = await supabase
         .from("consultation_requests")
-        .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+        .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_url, venue)")
         .eq("instructor_id", user.id)
         .eq("status", "approved")
         .order("requested_start_datetime", { ascending: true });
@@ -1031,7 +1038,7 @@ function MonthCalendar({
                       clickEvent.stopPropagation();
                       onOpenDetails(event.availability);
                     }}
-                    className="block w-full rounded-lg border border-[#2563eb]/30 bg-[#2563eb]/10 px-2 py-1 text-left text-xs text-foreground transition hover:bg-[#2563eb]/20"
+                    className="calendar-month-availability block w-full rounded-lg px-2 py-1 text-left text-xs transition"
                   >
                     <span className="flex items-center gap-1 font-semibold">
                       <ConsultationModeIcon
@@ -1053,7 +1060,7 @@ function MonthCalendar({
                       clickEvent.stopPropagation();
                       onOpenOccupiedDetails(request);
                     }}
-                    className={`block w-full rounded-lg border px-2 py-1 text-left text-xs transition ${programColorClasses(request.student?.program).soft}`}
+                    className="calendar-month-occupied block w-full rounded-lg px-2 py-1 text-left text-xs transition"
                   >
                     <span className="block font-semibold">Occupied</span>
                     <span className="block truncate">{studentName(request)}</span>
@@ -1221,16 +1228,21 @@ function AvailabilityEditor({
   const supportsVenue = mode === "f2f" || mode === "both";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
       <form
         onSubmit={onSave}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-2xl sm:p-7"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[1.75rem] border border-slate-300/80 bg-card p-6 shadow-xl dark:border-slate-700/80 sm:p-7"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-5 dark:border-slate-700">
           <div className="flex items-center gap-3">
             <CalendarPlus className="size-5 text-[#2563eb]" />
             <div>
-              <h3 className="font-medium">Open consultation window</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8da2ff]">
+                Consultation window
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-foreground">
+                Open consultation window
+              </h3>
               <p className="text-sm text-muted-foreground">
                 Choose a time students may request. You will approve or decline requests later.
               </p>
@@ -1239,7 +1251,7 @@ function AvailabilityEditor({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
             aria-label="Close"
           >
             <X className="size-4" />
@@ -1281,7 +1293,7 @@ function AvailabilityEditor({
               type="button"
               key={value}
               onClick={() => onModeChange(value)}
-              className={`rounded-xl border px-4 py-3 text-left text-sm ${mode === value ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-border bg-background"}`}
+              className={`rounded-xl border px-4 py-3 text-left text-sm transition ${mode === value ? "border-[#2563eb] bg-[#2563eb] text-white shadow-sm" : "border-border bg-background hover:border-[#2563eb]/50"}`}
             >
               <ConsultationModeIcon mode={value} className="mb-2 size-4" />
               {label}
@@ -1354,17 +1366,17 @@ function AvailabilityEditor({
           ))}
         </div>
         {error && <Toast message={error} tone="error" onClose={onErrorDismiss} />}
-        <div className="mt-6 flex justify-end gap-3 border-t border-border pt-5">
+        <div className="mt-6 flex justify-end gap-3 border-t border-slate-800/80 pt-5 dark:border-slate-700">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-border px-5 py-3 text-sm text-muted-foreground"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
           >
             Cancel
           </button>
           <button
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8] disabled:opacity-60"
           >
             {saving ? "Saving..." : "Open consultation window"}
             <Check className="size-4" />
@@ -1403,19 +1415,19 @@ function AvailabilityDetails({
         ? "Online"
         : "Online or F2F";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-md rounded-[1.75rem] border border-slate-300/80 bg-card p-6 shadow-xl dark:border-slate-700/80">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2563eb]">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8da2ff]">
               Consultation window details
             </p>
-            <h3 className="mt-2 text-xl font-medium">{date}</h3>
+            <h3 className="mt-2 text-xl font-semibold text-foreground">{date}</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
             aria-label="Close"
           >
             <X className="size-4" />
@@ -1431,7 +1443,7 @@ function AvailabilityDetails({
             <p className="mt-1 font-medium">{mode}</p>
           </div>
           {item.consultation_mode !== "f2f" && item.meeting_url && (
-              <div className="rounded-2xl border border-border bg-muted/25 p-4">
+              <div>
                 <p className="text-xs text-muted-foreground">
                   Online meeting
                 </p>
@@ -1450,7 +1462,7 @@ function AvailabilityDetails({
               </div>
             )}
           {item.consultation_mode !== "online" && item.venue && (
-            <div className="rounded-2xl border border-border bg-muted/25 p-4">
+            <div>
               <p className="text-xs text-muted-foreground">F2F location</p>
               <p className="mt-1 inline-flex items-center gap-2 font-medium">
                 <MapPin className="size-4 text-[#b91c1c]" />
@@ -1472,12 +1484,12 @@ function AvailabilityDetails({
             </div>
           </div>
         </div>
-        <div className="mt-7 flex justify-end gap-3 border-t border-border pt-5">
+        <div className="mt-7 flex flex-col gap-3 border-t border-slate-800/80 pt-5 sm:flex-row sm:justify-end dark:border-slate-700">
           <button
             type="button"
             onClick={onCloseWindow}
             disabled={!item.is_active}
-            className="inline-flex items-center gap-2 rounded-full border border-amber-200 px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#b97928] bg-slate-950 px-5 py-2 text-sm font-semibold text-[#ffd66b] shadow-sm transition hover:border-[#d99a3d] hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#6f5330] dark:bg-[#111827] dark:text-[#f5c86f] dark:hover:bg-[#1b2740]"
           >
             <Trash2 className="size-4" />
             {item.is_active ? "Close window" : "Already closed"}
@@ -1485,7 +1497,7 @@ function AvailabilityDetails({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-[#2563eb] px-5 py-2 text-sm font-medium text-white"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#2563eb] px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
           >
             Done
           </button>
@@ -1518,6 +1530,9 @@ function OccupiedDetails({
   const [saving, setSaving] = useState(false);
   const [nextStart, setNextStart] = useState(localDateTime(start));
   const [nextEnd, setNextEnd] = useState(localDateTime(end));
+  const format = request.availability?.consultation_mode
+    ? consultationModeLabel(request.availability.consultation_mode)
+    : "Consultation";
 
   async function submitReschedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1527,28 +1542,65 @@ function OccupiedDetails({
     if (saved) setEditing(false);
   }
 
+  function downloadCalendarInvite() {
+    downloadConsultationInvite({
+      id: request.id,
+      title: `Consultation with ${studentName(request)}`,
+      instructorName: "Instructor",
+      studentName: studentName(request),
+      studentProgram: request.student?.program,
+      studentSection: request.student?.section,
+      mode: format,
+      concern: concernLabel(request.concern_type),
+      message: request.message || "No concern details provided.",
+      start: request.requested_start_datetime,
+      end: request.requested_end_datetime,
+      meetingUrl: request.availability?.meeting_url,
+      venue: request.availability?.venue,
+    });
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-600">
-              Approved consultation
-            </p>
-            <h3 className="mt-2 text-xl font-medium">{studentName(request)}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[1.75rem] border border-slate-300/80 bg-card shadow-xl dark:border-slate-700/80">
+        <div className="border-b border-slate-800/80 bg-card p-6 dark:border-slate-700 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <span className="inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+                Approved consultation
+              </span>
+              <h3 className="mt-4 truncate text-2xl font-semibold text-foreground sm:text-3xl">
+                {studentName(request)}
+              </h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                Confirmed student appointment. Download the invite or manage
+                the schedule below.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={downloadCalendarInvite}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+              >
+                <Download className="size-4" />
+                <span className="hidden sm:inline">Download invite</span>
+                <span className="sm:hidden">Invite</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex size-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
+                aria-label="Close"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
         </div>
 
         {editing ? (
-          <form className="mt-6 space-y-4" onSubmit={submitReschedule}>
+          <form className="space-y-5 p-6 sm:p-7" onSubmit={submitReschedule}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="New start">
                 <input
@@ -1569,7 +1621,7 @@ function OccupiedDetails({
                 />
               </Field>
             </div>
-            <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+            <div className="grid gap-3 border-t border-slate-800/80 pt-5 dark:border-slate-700 sm:grid-cols-[1fr_1.2fr]">
               <button
                 type="button"
                 onClick={() => {
@@ -1578,13 +1630,13 @@ function OccupiedDetails({
                   setEditing(false);
                 }}
                 disabled={saving}
-                className="rounded-full border border-border px-5 py-3 text-sm text-muted-foreground"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
                 Cancel edit
               </button>
               <button
                 disabled={saving}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 transition hover:bg-[#1d4ed8] disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save new schedule"}
                 <Check className="size-4" />
@@ -1593,7 +1645,7 @@ function OccupiedDetails({
           </form>
         ) : (
           <>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 p-6 sm:grid-cols-2 sm:p-7">
               <DetailBlock label="Schedule">
                 {dateLabel(start, {
                   weekday: "long",
@@ -1605,6 +1657,7 @@ function OccupiedDetails({
                 {dateLabel(start, { hour: "numeric", minute: "2-digit" })} -{" "}
                 {dateLabel(end, { hour: "numeric", minute: "2-digit" })}
               </DetailBlock>
+              <DetailBlock label="Format">{format}</DetailBlock>
               <DetailBlock label="Concern">
                 <span className="capitalize">{request.concern_type}</span>
               </DetailBlock>
@@ -1614,37 +1667,40 @@ function OccupiedDetails({
               <DetailBlock label="Section">
                 {request.student?.section ?? "Section not set"}
               </DetailBlock>
+
+              {request.message && (
+                <div className="rounded-2xl bg-muted/30 p-4 text-sm leading-6 sm:col-span-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Student concern
+                  </p>
+                  <p className="mt-2 text-foreground">{request.message}</p>
+                </div>
+              )}
+
+              {request.student?.email && (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:col-span-2">
+                  Student email:{" "}
+                  <span className="font-medium text-foreground">
+                    {request.student.email}
+                  </span>
+                </div>
+              )}
+
+              {isPast && (
+                <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground sm:col-span-2">
+                  This approved consultation has already ended. It is kept as a
+                  view-only record.
+                </div>
+              )}
             </div>
 
-            {request.message && (
-              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Student concern
-                </p>
-                <p className="mt-2">{request.message}</p>
-              </div>
-            )}
-
-            {request.student?.email && (
-              <p className="mt-4 text-sm text-muted-foreground">
-                {request.student.email}
-              </p>
-            )}
-
-            {isPast && (
-              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
-                This approved consultation has already ended. It is kept as a
-                view-only record.
-              </div>
-            )}
-
-            <div className="mt-7 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+            <div className="border-t border-slate-800/80 bg-card p-6 dark:border-slate-700 sm:p-7">
               {!isPast && (
-                <>
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1.15fr]">
                   <button
                     type="button"
                     onClick={onCancel}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-rose-800/70 bg-[#160f18] px-4 py-3 text-center text-sm font-semibold text-rose-100 shadow-sm transition hover:border-rose-500 hover:bg-[#21111d] hover:text-white"
                   >
                     <Trash2 className="size-4" />
                     Cancel consultation
@@ -1652,20 +1708,31 @@ function OccupiedDetails({
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-[#2563eb]/40 hover:text-[#2563eb]"
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-3 text-center text-sm font-semibold text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
                   >
                     <Pencil className="size-4" />
                     Reschedule
                   </button>
-                </>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#2563eb] px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
+                  >
+                    Done
+                  </button>
+                </div>
               )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full bg-[#2563eb] px-5 py-3 text-sm font-medium text-white"
-              >
-                Done
-              </button>
+              {isPast && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex min-h-12 min-w-36 items-center justify-center rounded-full bg-[#2563eb] px-5 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1682,9 +1749,9 @@ function DetailBlock({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm">
+    <div className="min-h-24 rounded-2xl bg-muted/30 p-4 text-sm">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <div className="mt-2 font-medium leading-6">{children}</div>
+      <div className="mt-2 font-medium leading-6 text-foreground">{children}</div>
     </div>
   );
 }
@@ -1755,6 +1822,19 @@ function studentName(request: OccupiedConsultation) {
     "Student"
   );
 }
+function consultationModeLabel(mode: Availability["consultation_mode"]) {
+  if (mode === "f2f") return "F2F";
+  if (mode === "online") return "Online";
+  return "Online or F2F";
+}
+function concernLabel(concern: OccupiedConsultation["concern_type"]) {
+  return {
+    research: "Research",
+    grades: "Grades",
+    projects: "Projects",
+    others: "Others",
+  }[concern];
+}
 function byConsultationStart(
   first: OccupiedConsultation,
   second: OccupiedConsultation,
@@ -1766,10 +1846,14 @@ function byConsultationStart(
 }
 function normalizeOccupiedConsultations(
   rows: Array<
-    Omit<OccupiedConsultation, "student"> & {
+    Omit<OccupiedConsultation, "student" | "availability"> & {
       student?:
         | NonNullable<OccupiedConsultation["student"]>[]
         | NonNullable<OccupiedConsultation["student"]>
+        | null;
+      availability?:
+        | NonNullable<OccupiedConsultation["availability"]>[]
+        | NonNullable<OccupiedConsultation["availability"]>
         | null;
     }
   >,
@@ -1777,38 +1861,10 @@ function normalizeOccupiedConsultations(
   return rows.map((request) => ({
     ...request,
     student: Array.isArray(request.student) ? request.student[0] ?? null : request.student ?? null,
+    availability: Array.isArray(request.availability)
+      ? request.availability[0] ?? null
+      : request.availability ?? null,
   }));
-}
-function programColorClasses(program: string | null | undefined) {
-  const colorSets = [
-    {
-      solid: "border-sky-200/80 bg-sky-500/90 hover:bg-sky-500",
-      soft: "border-sky-300/70 bg-sky-500/15 text-sky-950 hover:bg-sky-500/25 dark:text-sky-50",
-    },
-    {
-      solid: "border-emerald-200/80 bg-emerald-500/90 hover:bg-emerald-500",
-      soft: "border-emerald-300/70 bg-emerald-500/15 text-emerald-950 hover:bg-emerald-500/25 dark:text-emerald-50",
-    },
-    {
-      solid: "border-violet-200/80 bg-violet-500/90 hover:bg-violet-500",
-      soft: "border-violet-300/70 bg-violet-500/15 text-violet-950 hover:bg-violet-500/25 dark:text-violet-50",
-    },
-    {
-      solid: "border-rose-200/80 bg-rose-500/90 hover:bg-rose-500",
-      soft: "border-rose-300/70 bg-rose-500/15 text-rose-950 hover:bg-rose-500/25 dark:text-rose-50",
-    },
-    {
-      solid: "border-amber-200/80 bg-amber-500/90 hover:bg-amber-500",
-      soft: "border-amber-300/70 bg-amber-500/15 text-amber-950 hover:bg-amber-500/25 dark:text-amber-50",
-    },
-    {
-      solid: "border-cyan-200/80 bg-cyan-500/90 hover:bg-cyan-500",
-      soft: "border-cyan-300/70 bg-cyan-500/15 text-cyan-950 hover:bg-cyan-500/25 dark:text-cyan-50",
-    },
-  ];
-  const key = program?.trim() || "Unknown";
-  const hash = Array.from(key).reduce((total, character) => total + character.charCodeAt(0), 0);
-  return colorSets[hash % colorSets.length];
 }
 function availabilityWindowForDay(availability: Availability, day: Date) {
   const start = new Date(availability.start_datetime);

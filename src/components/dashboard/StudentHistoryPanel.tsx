@@ -254,7 +254,7 @@ function HistoryCard({
       className={`relative rounded-2xl border p-4 transition ${
         selected
           ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-2 ring-primary/25"
-          : "border-border bg-background/70 hover:border-primary/30 hover:bg-background"
+          : "border-border bg-card shadow-sm hover:border-primary/30 hover:bg-muted/30"
       }`}
     >
       {selected && (
@@ -271,7 +271,7 @@ function HistoryCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={request.status} />
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium capitalize text-foreground">
+              <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold capitalize text-foreground">
                 {request.concern_type}
               </span>
             </div>
@@ -291,7 +291,7 @@ function HistoryCard({
 
         <div className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div className="flex gap-2 rounded-xl border border-border bg-muted/25 px-3 py-2.5">
+            <div className="flex gap-2 rounded-xl border border-border bg-background px-3 py-2.5 shadow-sm">
               <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" />
               <div>
                 <p className="text-sm font-medium">
@@ -307,7 +307,7 @@ function HistoryCard({
             </p>
           </div>
 
-          <div className="flex gap-2 rounded-xl bg-muted/30 px-3 py-2.5 text-sm leading-6 text-muted-foreground">
+          <div className="flex gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground shadow-sm">
             <MessageSquareText className="mt-1 size-4 shrink-0 text-muted-foreground" />
             <p className="line-clamp-3">
               {request.message || "No concern details provided."}
@@ -315,7 +315,7 @@ function HistoryCard({
           </div>
 
           {request.decision_note && (
-            <p className="rounded-xl border border-border bg-card px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+            <p className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs leading-5 text-foreground shadow-sm">
               {request.decision_note}
             </p>
           )}
@@ -337,15 +337,15 @@ function EmptyHistoryState({ children }: { children: React.ReactNode }) {
 
 function StatusBadge({ status }: { status: StudentHistoryRequest["status"] }) {
   const classes = {
-    pending: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-    approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-    declined: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
-    cancelled: "bg-muted text-muted-foreground",
+    pending: "status-badge-pending",
+    approved: "status-badge-approved",
+    declined: "status-badge-declined",
+    cancelled: "status-badge-cancelled",
   };
 
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${classes[status]}`}
+      className={`dashboard-status-badge rounded-full px-2.5 py-1 text-xs font-bold capitalize ${classes[status]}`}
     >
       {status}
     </span>

@@ -31,9 +31,9 @@
   --primary-foreground: #08111f;
   --muted: #17233d;
   --muted-foreground: #aebbd0;
-  --accent: #1f2a44;
+  --accent: #143244;
   --accent-foreground: #f7d56b;
-  --border: #2a3854;
+  --border: #30405c;
   --ring: #f5b800;
   --accent-soft: #f7d56b;
 }
@@ -75,7 +75,7 @@ body {
 :root[data-theme="dark"] body {
   background-image:
     radial-gradient(circle at 8% 2%, rgba(245, 184, 0, 0.14), transparent 28rem),
-    radial-gradient(circle at 92% 22%, rgba(37, 99, 235, 0.12), transparent 25rem),
+    radial-gradient(circle at 92% 22%, rgba(45, 212, 191, 0.09), transparent 25rem),
     linear-gradient(rgba(238, 242, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(238, 242, 255, 0.035) 1px, transparent 1px);
   background-size: auto, auto, 5rem 5rem, 5rem 5rem;
@@ -149,16 +149,45 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   :root[data-theme="dark"] .app-theme-toggle:hover,
   :root[data-theme="dark"] .app-theme-toggle:focus-visible {
     border-color: rgba(245, 184, 0, 0.34) !important;
-    background-color: #173b7a !important;
-    color: #ffffff !important;
+    background-color: rgba(245, 184, 0, 0.1) !important;
+    color: #f7d56b !important;
   }
   :root[data-theme="dark"] .app-theme-toggle svg,
   :root[data-theme="dark"] .app-theme-toggle span {
-    color: #ffffff !important;
+    color: #f7d56b !important;
   }
   :root[data-theme="dark"] .app-theme-toggle:hover {
-    border-color: rgba(245, 184, 0, 0.5) !important;
-    background-color: #1d4ed8 !important;
+    border-color: rgba(245, 184, 0, 0.55) !important;
+    background-color: rgba(245, 184, 0, 0.16) !important;
+  }
+  :root[data-theme="dark"] .text-\[\#a51c30\] {
+    color: #f7d56b !important;
+  }
+  :root[data-theme="dark"] .bg-\[\#a51c30\] {
+    background-color: #f5b800 !important;
+    color: #08111f !important;
+  }
+  :root[data-theme="dark"] .hover\:bg-\[\#8f1728\]:hover {
+    background-color: #f7d56b !important;
+    color: #08111f !important;
+  }
+  :root[data-theme="dark"] .bg-\[\#a51c30\]\/10 {
+    background-color: rgba(245, 184, 0, 0.12) !important;
+  }
+  :root[data-theme="dark"] .bg-\[\#a51c30\]\/15 {
+    background-color: rgba(45, 212, 191, 0.12) !important;
+  }
+  :root[data-theme="dark"] .border-\[\#a51c30\]\/15,
+  :root[data-theme="dark"] .border-\[\#a51c30\]\/25,
+  :root[data-theme="dark"] .border-\[\#a51c30\]\/30 {
+    border-color: rgba(245, 184, 0, 0.24) !important;
+  }
+  :root[data-theme="dark"] .hover\:border-\[\#a51c30\]\/40:hover,
+  :root[data-theme="dark"] .hover\:border-\[\#a51c30\]\/45:hover {
+    border-color: rgba(245, 184, 0, 0.42) !important;
+  }
+  :root[data-theme="dark"] .hover\:text-\[\#a51c30\]:hover {
+    color: #f7d56b !important;
   }
   .landing-theme-toggle,
   .landing-theme-toggle:hover,
@@ -183,6 +212,28 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   .bg-primary\/10 { background-color: #fff4cc !important; color: #8f1728 !important; }
   .calendar-availability { background-color: #5277b8 !important; color: #ffffff !important; }
   .calendar-availability-cell { background-color: var(--calendar-availability) !important; color: #ffffff !important; border-left-color: rgba(245, 184, 0, 0.55) !important; border-bottom-color: transparent !important; }
+  .calendar-month-availability {
+    border: 1px solid rgba(82, 119, 184, 0.42);
+    background-color: rgba(82, 119, 184, 0.16);
+    color: #10213f;
+  }
+  .calendar-month-availability:hover {
+    background-color: rgba(82, 119, 184, 0.24);
+  }
+  .calendar-month-availability span {
+    color: inherit;
+  }
+  .calendar-month-occupied {
+    border: 1px solid rgba(79, 155, 131, 0.5);
+    background-color: rgba(79, 155, 131, 0.18);
+    color: #123b31;
+  }
+  .calendar-month-occupied:hover {
+    background-color: rgba(79, 155, 131, 0.26);
+  }
+  .calendar-month-occupied span {
+    color: inherit;
+  }
   .calendar-event-start { border-top: 1px solid rgba(245, 184, 0, 0.55) !important; border-radius: 0.5rem 0.5rem 0 0; }
   .calendar-event-end { border-bottom: 1px solid rgba(245, 184, 0, 0.55) !important; border-radius: 0 0 0.5rem 0.5rem; }
   .calendar-availability:hover { background-color: #4669a8 !important; }
@@ -190,6 +241,22 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   :root[data-theme="dark"] .bg-primary\/10 { background-color: #1f2a44 !important; color: #f7d56b !important; }
   :root[data-theme="dark"] .calendar-availability { background-color: #5f83c2 !important; }
   :root[data-theme="dark"] .calendar-availability-cell { background-color: var(--calendar-availability) !important; border-left-color: rgba(245, 184, 0, 0.42) !important; }
+  :root[data-theme="dark"] .calendar-month-availability {
+    border-color: rgba(95, 131, 194, 0.56);
+    background-color: rgba(95, 131, 194, 0.2);
+    color: #dbeafe;
+  }
+  :root[data-theme="dark"] .calendar-month-availability:hover {
+    background-color: rgba(95, 131, 194, 0.3);
+  }
+  :root[data-theme="dark"] .calendar-month-occupied {
+    border-color: rgba(95, 174, 153, 0.54);
+    background-color: rgba(95, 174, 153, 0.2);
+    color: #ccfbf1;
+  }
+  :root[data-theme="dark"] .calendar-month-occupied:hover {
+    background-color: rgba(95, 174, 153, 0.3);
+  }
   :root[data-theme="dark"] .calendar-event-start { border-top-color: rgba(245, 184, 0, 0.42) !important; }
   :root[data-theme="dark"] .calendar-event-end { border-bottom-color: rgba(245, 184, 0, 0.42) !important; }
   button[class*="bg-primary/10"][class*="hover:bg-primary/20"] {
@@ -264,14 +331,102 @@ h1, h2, h3 { font-family: var(--font-display), sans-serif; }
   :root[data-theme="dark"] .student-dashboard-backdrop {
     background:
       radial-gradient(circle at 12% 4%, rgba(245, 184, 0, 0.11), transparent 24rem),
-      radial-gradient(circle at 88% 16%, rgba(37, 99, 235, 0.12), transparent 28rem),
+      radial-gradient(circle at 88% 16%, rgba(45, 212, 191, 0.08), transparent 28rem),
       linear-gradient(135deg, rgba(8, 17, 31, 0.98), rgba(12, 25, 48, 0.96));
   }
   :root[data-theme="dark"] .academic-dashboard-backdrop {
     background:
       radial-gradient(circle at 12% 4%, rgba(245, 184, 0, 0.11), transparent 24rem),
-      radial-gradient(circle at 88% 16%, rgba(37, 99, 235, 0.12), transparent 28rem),
+      radial-gradient(circle at 88% 16%, rgba(45, 212, 191, 0.08), transparent 28rem),
       linear-gradient(135deg, rgba(8, 17, 31, 0.98), rgba(12, 25, 48, 0.96));
+  }
+  .dashboard-status-badge {
+    border: 1px solid transparent;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+  }
+  .status-badge-approved {
+    border-color: #86efac !important;
+    background-color: #dcfce7 !important;
+    color: #14532d !important;
+  }
+  .status-badge-pending {
+    border-color: #fcd34d !important;
+    background-color: #fef3c7 !important;
+    color: #78350f !important;
+  }
+  .status-badge-declined {
+    border-color: #fca5a5 !important;
+    background-color: #fee2e2 !important;
+    color: #7f1d1d !important;
+  }
+  .status-badge-cancelled {
+    border-color: #cbd5e1 !important;
+    background-color: #f1f5f9 !important;
+    color: #334155 !important;
+  }
+  :root[data-theme="dark"] .status-badge-approved {
+    border-color: rgba(134, 239, 172, 0.32) !important;
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    color: #bbf7d0 !important;
+  }
+  :root[data-theme="dark"] .status-badge-pending {
+    border-color: rgba(252, 211, 77, 0.34) !important;
+    background-color: rgba(245, 158, 11, 0.2) !important;
+    color: #fde68a !important;
+  }
+  :root[data-theme="dark"] .status-badge-declined {
+    border-color: rgba(252, 165, 165, 0.32) !important;
+    background-color: rgba(239, 68, 68, 0.18) !important;
+    color: #fecaca !important;
+  }
+  :root[data-theme="dark"] .status-badge-cancelled {
+    border-color: rgba(203, 213, 225, 0.18) !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+  }
+  .consultation-invite-panel {
+    border-color: #93b4ff !important;
+    background-color: #eaf1ff !important;
+    color: #10234f !important;
+  }
+  .consultation-invite-title {
+    color: #10234f !important;
+  }
+  .consultation-invite-copy {
+    color: #263f73 !important;
+  }
+  .consultation-invite-note {
+    color: #3f5684 !important;
+  }
+  .consultation-lock-panel {
+    border-color: #f2c768 !important;
+    background-color: #fff3d8 !important;
+    color: #5f3b00 !important;
+  }
+  .student-help-kicker {
+    color: #8f1728 !important;
+  }
+  :root[data-theme="dark"] .consultation-invite-panel {
+    border-color: rgba(37, 99, 235, 0.35) !important;
+    background-color: rgba(37, 99, 235, 0.12) !important;
+    color: #dbeafe !important;
+  }
+  :root[data-theme="dark"] .consultation-invite-title {
+    color: #eff6ff !important;
+  }
+  :root[data-theme="dark"] .consultation-invite-copy {
+    color: rgba(219, 234, 254, 0.82) !important;
+  }
+  :root[data-theme="dark"] .consultation-invite-note {
+    color: rgba(219, 234, 254, 0.68) !important;
+  }
+  :root[data-theme="dark"] .consultation-lock-panel {
+    border-color: rgba(245, 158, 11, 0.36) !important;
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    color: #fde68a !important;
+  }
+  :root[data-theme="dark"] .student-help-kicker {
+    color: #ffd66b !important;
   }
 }
 

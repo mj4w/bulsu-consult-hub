@@ -70,7 +70,10 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL(next, url.origin));
+  const redirectUrl = new URL(next, url.origin);
+  redirectUrl.searchParams.set("welcome", "1");
+
+  return NextResponse.redirect(redirectUrl);
 }
 
 function safeInternalPath(value: string | null) {

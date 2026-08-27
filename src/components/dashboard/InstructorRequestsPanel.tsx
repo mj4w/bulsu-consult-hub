@@ -396,9 +396,12 @@ function RequestMetric({
   tone: "primary" | "success" | "muted";
 }) {
   const classes = {
-    primary: "bg-primary/10 text-primary",
-    success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-    muted: "bg-muted text-muted-foreground",
+    primary:
+      "border border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/15",
+    success:
+      "dashboard-status-badge status-badge-approved",
+    muted:
+      "border border-slate-300 bg-slate-100 text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-200",
   };
 
   return (
@@ -541,6 +544,7 @@ function RequestCard({
   const studentEmail = request.student?.email?.trim();
   const studentPhone = request.student?.phone_number?.trim();
   const color = programColorClasses(request.student?.program);
+  const statusBadge = requestStatusBadgeClass(request.status);
   const time = requestTimeLabel(request);
   const isPending = request.status === "pending";
 
@@ -553,7 +557,7 @@ function RequestCard({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${color.badge}`}>
+              <span className={`dashboard-status-badge rounded-full px-3 py-1 text-xs font-bold capitalize ${statusBadge}`}>
                 {request.status}
               </span>
               <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-foreground">
@@ -667,6 +671,13 @@ function requestTimeLabel(request: InstructorRequest) {
   return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}, ${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} - ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
+function requestStatusBadgeClass(status: InstructorRequest["status"]) {
+  if (status === "approved") return "status-badge-approved";
+  if (status === "pending") return "status-badge-pending";
+  if (status === "declined") return "status-badge-declined";
+  return "status-badge-cancelled";
+}
+
 function byRequestedStartDesc(first: InstructorRequest, second: InstructorRequest) {
   return (
     new Date(second.requested_start_datetime).getTime() -
@@ -730,27 +741,27 @@ function programColorClasses(program: string | null | undefined) {
   const colorSets = [
     {
       card: "border-sky-200/80 dark:border-sky-400/30",
-      badge: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+      badge: "border border-sky-300 bg-sky-100 text-sky-900 dark:border-sky-400/30 dark:bg-sky-400/15 dark:text-sky-100",
     },
     {
       card: "border-emerald-200/80 dark:border-emerald-400/30",
-      badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+      badge: "border border-emerald-300 bg-emerald-100 text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-100",
     },
     {
       card: "border-violet-200/80 dark:border-violet-400/30",
-      badge: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
+      badge: "border border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-400/30 dark:bg-violet-400/15 dark:text-violet-100",
     },
     {
       card: "border-rose-200/80 dark:border-rose-400/30",
-      badge: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+      badge: "border border-rose-300 bg-rose-100 text-rose-900 dark:border-rose-400/30 dark:bg-rose-400/15 dark:text-rose-100",
     },
     {
       card: "border-amber-200/80 dark:border-amber-400/30",
-      badge: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+      badge: "border border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/15 dark:text-amber-100",
     },
     {
       card: "border-cyan-200/80 dark:border-cyan-400/30",
-      badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-200",
+      badge: "border border-cyan-300 bg-cyan-100 text-cyan-900 dark:border-cyan-400/30 dark:bg-cyan-400/15 dark:text-cyan-100",
     },
   ];
   const key = program?.trim() || "Unknown";

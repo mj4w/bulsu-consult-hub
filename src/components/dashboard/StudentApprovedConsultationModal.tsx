@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Monitor,
   SquareSplitHorizontal,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -167,18 +168,18 @@ function statusLabel(status: ConsultationStatus) {
 
 function statusClass(status: ConsultationStatus) {
   if (status === "approved") {
-    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+    return "dashboard-status-badge status-badge-approved";
   }
 
   if (status === "pending") {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    return "dashboard-status-badge status-badge-pending";
   }
 
   if (status === "declined") {
-    return "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+    return "dashboard-status-badge status-badge-declined";
   }
 
-  return "bg-muted text-muted-foreground";
+  return "dashboard-status-badge status-badge-cancelled";
 }
 
 export function StudentApprovedConsultationModal({
@@ -405,16 +406,16 @@ export function StudentApprovedConsultationModal({
       : null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="consultation-details-title"
-        className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-300/80 bg-card shadow-xl dark:border-slate-700/80"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 bg-card px-5 py-5 dark:border-slate-700 sm:px-7">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8da2ff]">
               Consultation request
             </p>
 
@@ -439,14 +440,14 @@ export function StudentApprovedConsultationModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
             aria-label="Close"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-5 sm:p-7">
           <div className="rounded-2xl border border-[#2563eb]/15 bg-[#2563eb]/5 p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
@@ -596,7 +597,7 @@ export function StudentApprovedConsultationModal({
                     setEditing(false);
                   }}
                   disabled={saving}
-                  className="rounded-full border border-border px-5 py-2.5 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-border bg-background px-5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
                   Cancel edit
                 </button>
@@ -605,7 +606,7 @@ export function StudentApprovedConsultationModal({
                   type="button"
                   onClick={() => void saveChanges()}
                   disabled={saving}
-                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8] disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Save changes"}
                 </button>
@@ -644,11 +645,11 @@ export function StudentApprovedConsultationModal({
               </div>
 
               {!editing && !confirmCancel && (
-                <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+                <div className="flex flex-col gap-3 border-t border-slate-800/80 pt-5 dark:border-slate-700 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium transition hover:border-primary/40 hover:text-primary"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
                   >
                     <Edit3 className="size-4" />
                     Edit concern details
@@ -657,9 +658,9 @@ export function StudentApprovedConsultationModal({
                   <button
                     type="button"
                     onClick={() => setConfirmCancel(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 px-5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-800/70 bg-[#160f18] px-5 py-3 text-sm font-semibold text-rose-100 shadow-sm transition hover:border-rose-500 hover:bg-[#21111d] hover:text-white"
                   >
-                    <X className="size-4" />
+                    <Trash2 className="size-4 text-rose-200" />
                     Cancel request
                   </button>
                 </div>
@@ -680,7 +681,7 @@ export function StudentApprovedConsultationModal({
                       type="button"
                       onClick={() => setConfirmCancel(false)}
                       disabled={cancelling}
-                      className="rounded-full border border-border px-5 py-2.5 text-sm font-medium"
+                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-border bg-background px-5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     >
                       Keep request
                     </button>
@@ -689,7 +690,7 @@ export function StudentApprovedConsultationModal({
                       type="button"
                       onClick={() => void cancelPendingRequest()}
                       disabled={cancelling}
-                      className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
                     >
                       {cancelling
                         ? "Cancelling..."
@@ -718,21 +719,21 @@ export function StudentApprovedConsultationModal({
             <>
               {!isPastApproved && (
                 <div className="space-y-3">
-                  <div className="rounded-2xl border border-[#2563eb]/20 bg-[#2563eb]/8 p-4">
+                  <div className="consultation-invite-panel rounded-2xl border p-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white">
                           <CalendarCheck2 className="size-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold">
+                          <p className="consultation-invite-title text-sm font-semibold">
                             Calendar invite
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          <p className="consultation-invite-copy mt-1 text-sm leading-6">
                             Download an .ics invite and open it with Outlook,
                             Microsoft Calendar, Google Calendar, or Apple Calendar.
                           </p>
-                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          <p className="consultation-invite-note mt-2 text-xs leading-5">
                             Direct Outlook sync requires university admin approval,
                             so the invite file is the supported option for now.
                           </p>
@@ -742,7 +743,7 @@ export function StudentApprovedConsultationModal({
                       <button
                         type="button"
                         onClick={downloadCalendarInvite}
-                        className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4ed8]"
+                        className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
                       >
                         <span className="flex size-6 items-center justify-center rounded-full bg-white/15 text-white transition group-hover:scale-105">
                           <CalendarCheck2 className="size-4" />
@@ -762,7 +763,7 @@ export function StudentApprovedConsultationModal({
               )}
 
               {!isPastApproved && !canCancel && (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
+                <div className="consultation-lock-panel rounded-2xl border p-4 text-sm leading-6">
                   <strong>Cancellation is locked.</strong>{" "}
                   This consultation starts in less than 24 hours.
                   You can no longer cancel it.
@@ -781,14 +782,14 @@ export function StudentApprovedConsultationModal({
               )}
 
               {!editing && !confirmCancel && (
-                <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+                <div className="flex flex-col gap-3 border-t border-slate-800/80 pt-5 dark:border-slate-700 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setConfirmCancel(true)}
                     disabled={!canCancel}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 px-5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-800/70 bg-[#160f18] px-5 py-3 text-sm font-semibold text-rose-100 shadow-sm transition hover:border-rose-500 hover:bg-[#21111d] hover:text-white disabled:cursor-not-allowed disabled:border-rose-900/60 disabled:bg-[#160f18]/80 disabled:text-rose-200/70"
                   >
-                    <X className="size-4" />
+                    <Trash2 className="size-4 text-rose-200" />
                     Cancel consultation
                   </button>
                 </div>
@@ -811,7 +812,7 @@ export function StudentApprovedConsultationModal({
                       type="button"
                       onClick={() => setConfirmCancel(false)}
                       disabled={cancelling}
-                      className="rounded-full border border-border px-5 py-2.5 text-sm font-medium"
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-border bg-background px-5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     >
                       Keep consultation
                     </button>
@@ -820,7 +821,7 @@ export function StudentApprovedConsultationModal({
                       type="button"
                       onClick={() => void cancelConsultation()}
                       disabled={cancelling}
-                      className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
                     >
                       {cancelling
                         ? "Cancelling..."
@@ -847,7 +848,7 @@ function DetailItem({
   value: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-background/45 p-3">
+    <div className="rounded-2xl bg-muted/30 p-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-4" />
         {label}

@@ -10,6 +10,7 @@ import {
   type StudentHistoryRequest,
 } from "@/components/dashboard/StudentHistoryPanel";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { StudentHelpWidget } from "@/components/dashboard/StudentHelpWidget";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,6 +109,7 @@ export default async function StudentHistoryPage() {
 
         <StudentHistoryPanel initialRequests={requests} />
       </div>
+      <StudentHelpWidget />
     </main>
   );
 }

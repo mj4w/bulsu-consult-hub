@@ -135,7 +135,7 @@ export default function Home() {
         <div
           className={`absolute inset-0 ${
             darkMode
-              ? "bg-[radial-gradient(circle_at_18%_18%,rgba(245,184,0,0.12),transparent_22rem),radial-gradient(circle_at_88%_32%,rgba(37,99,235,0.20),transparent_30rem),linear-gradient(135deg,rgba(8,17,31,0.98),rgba(13,28,52,0.96)_52%,rgba(7,14,27,0.98))]"
+              ? "bg-[radial-gradient(circle_at_18%_18%,rgba(245,184,0,0.13),transparent_22rem),radial-gradient(circle_at_88%_32%,rgba(45,212,191,0.12),transparent_30rem),linear-gradient(135deg,rgba(8,17,31,0.98),rgba(13,28,52,0.96)_52%,rgba(7,14,27,0.98))]"
               : "bg-[radial-gradient(circle_at_18%_18%,rgba(245,184,0,0.18),transparent_22rem),linear-gradient(135deg,rgba(255,250,240,0.98),rgba(255,247,226,0.96)_52%,rgba(252,240,216,0.92))]"
           }`}
         />
@@ -178,7 +178,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link
               href="/auth/microsoft"
-              className={`inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition hover:-translate-y-0.5 ${darkMode ? "bg-[#173b7a] text-white shadow-blue-950/25 ring-1 ring-[#f5b800]/15 hover:bg-[#1d4ed8]" : "bg-[#a51c30] text-white shadow-red-300/30 hover:bg-[#8f1728]"}`}
+              className={`inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition hover:-translate-y-0.5 ${darkMode ? "bg-[#f5b800] text-[#08111f] shadow-yellow-950/20 ring-1 ring-white/10 hover:bg-[#f7d56b]" : "bg-[#a51c30] text-white shadow-red-300/30 hover:bg-[#8f1728]"}`}
             >
               <MicrosoftMark />
               Sign in with Microsoft
@@ -238,7 +238,7 @@ export default function Home() {
             </div>
             <Link
               href="/auth/microsoft"
-              className="inline-flex w-fit items-center gap-2 rounded-full bg-[#a51c30] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#8f1728]"
+              className={`inline-flex w-fit items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${darkMode ? "bg-[#f5b800] text-[#08111f] hover:bg-[#f7d56b]" : "bg-[#a51c30] text-white hover:bg-[#8f1728]"}`}
             >
               Start now <ArrowUpRight className="size-4" />
             </Link>
@@ -257,7 +257,7 @@ export default function Home() {
               whileInView={{ scaleX: 1 }}
               viewport={{ once: true, amount: 0.4 }}
               transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute left-6 right-6 top-10 hidden h-px origin-left bg-gradient-to-r from-[#f5b800]/0 via-[#f5b800]/55 to-[#a51c30]/45 lg:block"
+              className={`absolute left-6 right-6 top-10 hidden h-px origin-left bg-gradient-to-r from-[#f5b800]/0 via-[#f5b800]/55 lg:block ${darkMode ? "to-[#2dd4bf]/35" : "to-[#a51c30]/45"}`}
             />
             {workflowCards.map(([step, title, copy], index) => (
               <ProcessCard key={step} step={step} title={title} copy={copy} index={index} />
@@ -283,8 +283,8 @@ export default function Home() {
         <div className="grid gap-6">
           <motion.div whileHover={{ y: -3 }} className="rounded-[2rem] border border-border bg-card p-6 transition">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a51c30]">Calendar logic</p>
-              <Clock3 className="size-5 text-[#a51c30]" />
+              <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${darkMode ? "text-[#f7d56b]" : "text-[#a51c30]"}`}>Calendar logic</p>
+              <Clock3 className={darkMode ? "size-5 text-[#2dd4bf]" : "size-5 text-[#a51c30]"} />
             </div>
             <div className="mt-6 space-y-3">
               <PreviewRow label="Available window" value="9:00 AM - 1:00 PM" />
@@ -302,10 +302,10 @@ export default function Home() {
         </div>
       </MotionSection>
 
-      <MotionSection id="security" className={`border-y border-[#a51c30]/15 ${darkMode ? "bg-[linear-gradient(135deg,rgba(8,17,31,0.98),rgba(13,28,52,0.94),rgba(74,46,6,0.42))] text-white" : "bg-[linear-gradient(135deg,rgba(255,250,240,0.96),rgba(255,247,226,0.9))] text-[#241316]"}`}>
+      <MotionSection id="security" className={`border-y ${darkMode ? "border-[#f5b800]/15 bg-[linear-gradient(135deg,rgba(8,17,31,0.98),rgba(13,28,52,0.94),rgba(13,59,66,0.36))] text-white" : "border-[#a51c30]/15 bg-[linear-gradient(135deg,rgba(255,250,240,0.96),rgba(255,247,226,0.9))] text-[#241316]"}`}>
         <div className="mx-auto grid w-full max-w-[94rem] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:px-10 lg:py-24">
           <div>
-            <div className="flex size-14 items-center justify-center rounded-2xl bg-[#a51c30] text-white">
+            <div className={`flex size-14 items-center justify-center rounded-2xl ${darkMode ? "bg-[#f5b800] text-[#08111f]" : "bg-[#a51c30] text-white"}`}>
               <LockKeyhole className="size-7" />
             </div>
             <h2 className="mt-6 text-4xl font-medium leading-tight tracking-[-0.04em]">
@@ -343,7 +343,7 @@ export default function Home() {
               What graduate students and faculty should know before using it.
             </h2>
             <div className="mt-8 rounded-3xl border border-border bg-card p-5">
-              <MessageCircleQuestion className="size-6 text-[#a51c30]" />
+              <MessageCircleQuestion className={darkMode ? "size-6 text-[#f7d56b]" : "size-6 text-[#a51c30]"} />
               <p className="mt-4 text-sm leading-6 text-muted-foreground">
                 Clear rules make the scheduler easier to trust for both students and instructors.
               </p>
@@ -358,7 +358,7 @@ export default function Home() {
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                 >
                   {question}
-                  <motion.span animate={{ rotate: openFaq === index ? 180 : 0 }} className="text-2xl font-light text-[#a51c30]">
+                  <motion.span animate={{ rotate: openFaq === index ? 180 : 0 }} className={`text-2xl font-light ${darkMode ? "text-[#f7d56b]" : "text-[#a51c30]"}`}>
                     {openFaq === index ? "-" : "+"}
                   </motion.span>
                 </button>
@@ -413,7 +413,7 @@ export default function Home() {
             exit={{ opacity: 0, y: 18, scale: 0.94 }}
             transition={{ duration: 0.22 }}
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed bottom-6 right-6 z-50 inline-flex size-12 items-center justify-center rounded-full border border-[#f5b800]/35 bg-[#a51c30] text-white shadow-2xl shadow-red-950/25 transition hover:-translate-y-1 hover:bg-[#8f1728]"
+            className={`fixed bottom-6 right-6 z-50 inline-flex size-12 items-center justify-center rounded-full border shadow-2xl transition hover:-translate-y-1 ${darkMode ? "border-[#f5b800]/35 bg-[#f5b800] text-[#08111f] shadow-yellow-950/20 hover:bg-[#f7d56b]" : "border-[#f5b800]/35 bg-[#a51c30] text-white shadow-red-950/25 hover:bg-[#8f1728]"}`}
           >
             <ArrowUp className="size-5" />
           </motion.button>
@@ -461,7 +461,7 @@ function Header({
             {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
             <span>{darkMode ? "Light" : "Dark"}</span>
           </Button>
-          <Link href="/auth/microsoft" className={`hidden items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 md:inline-flex ${darkMode ? "bg-[#173b7a] ring-1 ring-[#f5b800]/15 hover:bg-[#1d4ed8]" : "bg-[#a51c30] hover:bg-[#8f1728]"}`}>
+          <Link href="/auth/microsoft" className={`hidden items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5 md:inline-flex ${darkMode ? "bg-[#f5b800] text-[#08111f] ring-1 ring-white/10 hover:bg-[#f7d56b]" : "bg-[#a51c30] text-white hover:bg-[#8f1728]"}`}>
             <MicrosoftMark />Sign in
           </Link>
           <Button variant="ghost" size="icon" className={darkMode ? "text-white md:hidden" : "text-[#17233d] md:hidden"} aria-label="Open menu" onClick={onOpenMenu}><Menu className="size-5" /></Button>

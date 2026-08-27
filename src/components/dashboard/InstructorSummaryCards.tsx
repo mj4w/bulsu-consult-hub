@@ -9,15 +9,18 @@ import {
   CalendarRange,
   ClipboardList,
   Clock,
+  Download,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { downloadConsultationInvite } from "@/lib/calendar/ics";
 
 type InstructorRequestSummary = {
   id: string;
   requested_start_datetime: string;
   requested_end_datetime?: string;
   concern_type?: "research" | "grades" | "projects" | "others";
+  message?: string | null;
   status: "pending" | "approved" | "declined" | "cancelled";
   student?:
     | {
@@ -31,6 +34,18 @@ type InstructorRequestSummary = {
         email: string | null;
         program: string | null;
         section: string | null;
+      }[]
+    | null;
+  availability?:
+    | {
+        consultation_mode: "f2f" | "online" | "both";
+        meeting_url?: string | null;
+        venue?: string | null;
+      }
+    | {
+        consultation_mode: "f2f" | "online" | "both";
+        meeting_url?: string | null;
+        venue?: string | null;
       }[]
     | null;
 };
@@ -77,7 +92,7 @@ export function InstructorSummaryCards({
 
       const { data } = await supabase
         .from("consultation_requests")
-        .select("id, requested_start_datetime, requested_end_datetime, concern_type, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+        .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_url, venue)")
         .eq("instructor_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -188,11 +203,21 @@ export function InstructorSummaryCards({
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-border bg-background/70 px-4 py-3">
-              <Clock className="size-5 text-[#3f8f75]" />
-              <div>
-                <p className="text-xs text-muted-foreground">Status</p>
-                <p className="text-sm font-semibold text-[#3f8f75]">Confirmed</p>
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => downloadInstructorInvite(nextApproved)}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background/80 px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:bg-muted"
+              >
+                <Download className="size-4" />
+                Download invite
+              </button>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-background/70 px-4 py-3">
+                <Clock className="size-5 text-[#3f8f75]" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <p className="text-sm font-semibold text-[#3f8f75]">Confirmed</p>
+                </div>
               </div>
             </div>
           </div>
@@ -272,6 +297,50 @@ function studentName(request: InstructorRequestSummary) {
     student?.email?.split("@")[0] ||
     "Student"
   );
+}
+
+function studentProfile(request: InstructorRequestSummary) {
+  return Array.isArray(request.student)
+    ? (request.student[0] ?? null)
+    : (request.student ?? null);
+}
+
+function requestAvailability(request: InstructorRequestSummary) {
+  return Array.isArray(request.availability)
+    ? (request.availability[0] ?? null)
+    : (request.availability ?? null);
+}
+
+function downloadInstructorInvite(request: InstructorRequestSummary) {
+  const student = studentProfile(request);
+  const availability = requestAvailability(request);
+  const format = availability?.consultation_mode
+    ? consultationModeLabel(availability.consultation_mode)
+    : "Consultation";
+
+  downloadConsultationInvite({
+    id: request.id,
+    title: `Consultation with ${studentName(request)}`,
+    instructorName: "Instructor",
+    studentName: studentName(request),
+    studentProgram: student?.program,
+    studentSection: student?.section,
+    mode: format,
+    concern: request.concern_type
+      ? concernLabel(request.concern_type)
+      : "Consultation",
+    message: request.message || "No concern details provided.",
+    start: request.requested_start_datetime,
+    end: request.requested_end_datetime ?? request.requested_start_datetime,
+    meetingUrl: availability?.meeting_url,
+    venue: availability?.venue,
+  });
+}
+
+function consultationModeLabel(mode: "f2f" | "online" | "both") {
+  if (mode === "f2f") return "F2F";
+  if (mode === "online") return "Online";
+  return "Online or F2F";
 }
 
 function requestDateTime(request: InstructorRequestSummary) {

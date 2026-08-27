@@ -34,6 +34,7 @@ import { DashboardGuidedTour } from "@/components/dashboard/DashboardGuidedTour"
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/ui/Toast";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { StudentHelpWidget } from "@/components/dashboard/StudentHelpWidget";
 import {
   StudentHistoryPanel,
   type StudentHistoryRequest,
@@ -308,6 +309,20 @@ export function StudentConsultationWorkspace({
 
     return () => window.clearTimeout(timer);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get("welcome") !== "1") return;
+
+    const timer = window.setTimeout(() => {
+      setToast({
+        message: `Welcome, ${displayName}.`,
+        tone: "success",
+      });
+      router.replace("/dashboard/student", { scroll: false });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [displayName, router, searchParams]);
 
   useEffect(() => {
     if (searchParams.get("profile") !== "saved") return;
@@ -924,6 +939,7 @@ export function StudentConsultationWorkspace({
           });
         }}
       />
+      <StudentHelpWidget />
     </main>
   );
 }
@@ -2203,17 +2219,17 @@ function RequestConsultationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 p-4">
       <form
         onSubmit={submit}
-        className="flex h-[min(90vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl"
+        className="flex h-[min(90vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-300/80 bg-card shadow-xl dark:border-slate-700/80"
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card/95 px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800/80 bg-card px-5 py-5 dark:border-slate-700 sm:px-7">
           <div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8da2ff]">
               Request consultation
             </p>
-            <h3 className="mt-1 text-2xl font-medium tracking-tight">
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
               {professor}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -2230,10 +2246,10 @@ function RequestConsultationModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
             aria-label="Close request modal"
           >
-            <X className="size-5" />
+            <X className="size-4" />
           </button>
         </div>
 
@@ -2367,17 +2383,17 @@ function RequestConsultationModal({
           </label>
         </div>
 
-        <div className="flex shrink-0 justify-end gap-3 border-t border-border px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-800/80 px-5 py-4 dark:border-slate-700 sm:px-7">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-border px-5 py-3 text-sm text-muted-foreground"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
           >
             Cancel
           </button>
           <button
             disabled={saving || !selectedStart || !selectedEnd}
-            className="inline-flex items-center gap-2 rounded-full bg-[#a51c30] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#8f1728] disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8] disabled:opacity-60"
           >
             {saving ? "Sending..." : "Send request"}
             <Send className="size-4" />

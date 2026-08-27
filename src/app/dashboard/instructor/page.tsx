@@ -68,21 +68,28 @@ export default async function InstructorDashboardPage() {
   }>;
   const { data: requestData, error: requestError } = await supabase
     .from("consultation_requests")
-    .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section)")
+    .select("id, requested_start_datetime, requested_end_datetime, concern_type, message, decision_note, status, student:profiles!consultation_requests_student_id_fkey(full_name, email, program, section), availability:instructor_availability!consultation_requests_availability_id_fkey(consultation_mode, meeting_url, venue)")
     .eq("instructor_id", user.id)
     .order("created_at", { ascending: false });
 
   const requests = ((requestError ? [] : requestData ?? []) as Array<
-    Omit<OccupiedConsultation, "student"> & {
+    Omit<OccupiedConsultation, "student" | "availability"> & {
       status: "pending" | "approved" | "declined" | "cancelled";
       student?:
         | NonNullable<OccupiedConsultation["student"]>[]
         | NonNullable<OccupiedConsultation["student"]>
         | null;
+      availability?:
+        | NonNullable<OccupiedConsultation["availability"]>[]
+        | NonNullable<OccupiedConsultation["availability"]>
+        | null;
     }
   >).map((request) => ({
     ...request,
     student: Array.isArray(request.student) ? request.student[0] ?? null : request.student ?? null,
+    availability: Array.isArray(request.availability)
+      ? request.availability[0] ?? null
+      : request.availability ?? null,
   }));
   const approvedRequests = requests.filter((request) => request.status === "approved");
 

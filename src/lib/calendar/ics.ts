@@ -2,6 +2,9 @@ type CalendarInviteInput = {
   id: string;
   title: string;
   instructorName: string;
+  studentName?: string | null;
+  studentProgram?: string | null;
+  studentSection?: string | null;
   mode: string;
   concern: string;
   message: string;
@@ -15,6 +18,9 @@ export function downloadConsultationInvite({
   id,
   title,
   instructorName,
+  studentName,
+  studentProgram,
+  studentSection,
   mode,
   concern,
   message,
@@ -47,6 +53,14 @@ export function downloadConsultationInvite({
         "Consultation Appointment",
         "",
         `Instructor: ${instructorName}`,
+        ...(studentName ? [`Student: ${studentName}`] : []),
+        ...(studentProgram || studentSection
+          ? [
+              `Student details: ${[studentProgram, studentSection]
+                .filter(Boolean)
+                .join(", ")}`,
+            ]
+          : []),
         `Consultation format: ${mode}`,
         ...(meetingUrl ? [`Meeting link: ${meetingUrl}`] : []),
         ...(venue ? [`F2F location: ${venue}`] : []),
